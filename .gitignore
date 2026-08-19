@@ -2,4 +2,6 @@
 Thumbs.db
 .vercel
 node_modules
-
+.tools
+.npm-cache
+.npm-global
