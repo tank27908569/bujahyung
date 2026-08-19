@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="10" fill="#171815"/>
+  <rect x="7" y="7" width="50" height="50" rx="5" fill="#8f2e25"/>
+  <rect x="11" y="11" width="42" height="42" rx="2" fill="none" stroke="#f1eee6" stroke-width="1.5" opacity=".72"/>
+  <text x="32" y="45" fill="#f1eee6" font-family="Batang, 'Noto Serif CJK KR', serif" font-size="36" font-weight="700" text-anchor="middle">富</text>
+</svg>
