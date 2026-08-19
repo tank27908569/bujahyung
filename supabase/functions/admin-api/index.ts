@@ -73,7 +73,7 @@ async function validSession(token: string) {
 
 async function login(req: Request, origin: string | null, pin: string) {
   const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("cf-connecting-ip") || "unknown";
-  const identifier = await sha256(`${forwarded}|${req.headers.get("user-agent") || "unknown"}`);
+  const identifier = await sha256(forwarded);
   const { data: attempt, error: readError } = await db.from("admin_login_attempts").select("*").eq("identifier", identifier).maybeSingle();
   if (readError) return json(origin, { error: "로그인 보호 기능을 확인하지 못했습니다." }, 503);
   const now = Date.now();
@@ -85,16 +85,18 @@ async function login(req: Request, origin: string | null, pin: string) {
     const withinWindow = attempt?.window_started_at && now - new Date(attempt.window_started_at).getTime() < 15 * 60 * 1000;
     const failures = withinWindow ? Number(attempt.failures || 0) + 1 : 1;
     const blockedUntil = failures >= 5 ? new Date(now + 60 * 60 * 1000).toISOString() : null;
-    await db.from("admin_login_attempts").upsert({
+    const { error: writeError } = await db.from("admin_login_attempts").upsert({
       identifier,
       failures,
       window_started_at: withinWindow ? attempt.window_started_at : new Date(now).toISOString(),
       blocked_until: blockedUntil,
       updated_at: new Date(now).toISOString(),
     });
+    if (writeError) return json(origin, { error: "로그인 보호 기능을 적용하지 못했습니다." }, 503);
     return json(origin, { error: failures >= 5 ? "비밀번호 입력 횟수를 초과했습니다. 1시간 후 다시 시도해 주세요." : "관리 비밀번호가 맞지 않습니다." }, failures >= 5 ? 429 : 401);
   }
-  await db.from("admin_login_attempts").delete().eq("identifier", identifier);
+  const { error: clearError } = await db.from("admin_login_attempts").delete().eq("identifier", identifier);
+  if (clearError) return json(origin, { error: "로그인 보호 기능을 초기화하지 못했습니다." }, 503);
   return json(origin, { session: await createSession() });
 }
 

@@ -17,3 +17,9 @@
 ## 배포
 
 Vercel에서 별도 빌드 명령 없이 저장소 루트를 배포하면 됩니다.
+
+관리자 CMS를 배포하려면 Supabase 마이그레이션을 적용하고 `admin-api` 함수에
+`ADMIN_PIN_SALT`, `ADMIN_PIN_HASH`, `ADMIN_SESSION_SECRET` 시크릿을 설정해야 합니다.
+`ADMIN_PIN_HASH`는 `SHA-256("PIN:SALT")`의 16진수 해시이며, 세 값은 저장소에 커밋하지 않습니다.
+`supabase/config.toml`의 `verify_jwt = false`는 로그인 요청을 함수까지 전달하기 위한 설정이며,
+관리 작업은 함수가 발급하고 검증하는 서명 세션으로 보호됩니다.

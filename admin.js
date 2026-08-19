@@ -8,7 +8,8 @@ const publishedList = document.querySelector('#published-list');
 const adminMessage = document.querySelector('#admin-message');
 const loginMessage = document.querySelector('#login-message');
 const editModal = document.querySelector('#edit-modal');
-let adminSession = '';
+const sessionKey = 'bujahyung_admin_session';
+let adminSession = sessionStorage.getItem(sessionKey) || '';
 let sourceEntries = [];
 let publishedPosts = [];
 let selectedNumbers = new Set();
@@ -27,6 +28,10 @@ async function api(action, payload = {}) {
     body: JSON.stringify({ action, ...payload })
   });
   const result = await response.json().catch(() => ({}));
+  if (response.status === 401) {
+    adminSession = '';
+    sessionStorage.removeItem(sessionKey);
+  }
   if (!response.ok) throw new Error(result.error || '작업을 처리하지 못했습니다.');
   return result;
 }
@@ -85,15 +90,17 @@ document.querySelector('#login-form').addEventListener('submit', async event => 
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.session) throw new Error(result.error || '관리 비밀번호를 확인하지 못했습니다.');
     adminSession = result.session;
+    sessionStorage.setItem(sessionKey, adminSession);
     document.querySelector('#admin-pin').value = '';
     await showAdmin();
   } catch (error) {
     adminSession = '';
+    sessionStorage.removeItem(sessionKey);
     message(loginMessage, error.message || '관리 비밀번호가 맞지 않습니다.', true);
   }
 });
 
-document.querySelector('#logout-button').addEventListener('click', () => { adminSession = ''; location.reload(); });
+document.querySelector('#logout-button').addEventListener('click', () => { adminSession = ''; sessionStorage.removeItem(sessionKey); location.reload(); });
 sourceList.addEventListener('change', event => { if (!event.target.matches('input[type="checkbox"]')) return; const number = Number(event.target.value); event.target.checked ? selectedNumbers.add(number) : selectedNumbers.delete(number); selectionStatus(); });
 document.querySelector('#source-search').addEventListener('input', event => { const query = event.target.value.trim().toLocaleLowerCase('ko'); renderSources(sourceEntries.filter(item => `${item.source_no} ${item.title} ${item.body}`.toLocaleLowerCase('ko').includes(query))); });
 document.querySelector('#clear-selection').addEventListener('click', () => { selectedNumbers.clear(); renderSources(); selectionStatus(); });
@@ -120,3 +127,8 @@ document.querySelector('#edit-cancel').addEventListener('click', closeEdit);
 editModal.addEventListener('click', event => { if (event.target === editModal) closeEdit(); });
 
 if (!isConfigured) message(loginMessage, 'Supabase 프로젝트 연결이 필요합니다.', true);
+else if (adminSession) showAdmin().catch(() => {
+  adminSession = '';
+  sessionStorage.removeItem(sessionKey);
+  message(loginMessage, '로그인 시간이 만료되었습니다. 다시 로그인해 주세요.', true);
+});
