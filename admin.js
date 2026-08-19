@@ -8,16 +8,10 @@ const publishedList = document.querySelector('#published-list');
 const adminMessage = document.querySelector('#admin-message');
 const loginMessage = document.querySelector('#login-message');
 const editModal = document.querySelector('#edit-modal');
-const vaultKey = 'bujahyung_admin_vault';
-const setupToken = new URLSearchParams(location.hash.slice(1)).get('setup') || '';
-let adminToken = '';
+let adminSession = '';
 let sourceEntries = [];
 let publishedPosts = [];
 let selectedNumbers = new Set();
-
-const toBase64 = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes)));
-const fromBase64 = value => Uint8Array.from(atob(value), character => character.charCodeAt(0));
-
 function escapeHtml(value = '') {
   return value.replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
 }
@@ -26,34 +20,10 @@ function message(target, text, error = false) {
   target.innerHTML = text ? `<p class="notice${error ? ' error' : ''}">${escapeHtml(text)}</p>` : '';
 }
 
-async function deriveKey(pin, salt) {
-  const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 250000, hash: 'SHA-256' }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
-}
-
-async function saveVault(token, pin) {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveKey(pin, salt);
-  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(token));
-  localStorage.setItem(vaultKey, JSON.stringify({ salt: toBase64(salt), iv: toBase64(iv), data: toBase64(encrypted) }));
-}
-
-async function openVault(pin) {
-  const stored = localStorage.getItem(vaultKey);
-  if (!stored) throw new Error('이 기기는 아직 관리 기기로 등록되지 않았습니다.');
-  const vault = JSON.parse(stored);
-  const salt = fromBase64(vault.salt);
-  const iv = fromBase64(vault.iv);
-  const key = await deriveKey(pin, salt);
-  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, fromBase64(vault.data));
-  return new TextDecoder().decode(decrypted);
-}
-
 async function api(action, payload = {}) {
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    headers: { 'Content-Type': 'application/json', 'x-admin-session': adminSession },
     body: JSON.stringify({ action, ...payload })
   });
   const result = await response.json().catch(() => ({}));
@@ -104,23 +74,26 @@ document.querySelector('#login-form').addEventListener('submit', async event => 
   event.preventDefault();
   if (!isConfigured) { message(loginMessage, 'Supabase 연결이 아직 완료되지 않았습니다.', true); return; }
   const pin = document.querySelector('#admin-pin').value;
-  message(loginMessage, setupToken ? '이 기기를 관리 기기로 등록하고 있습니다.' : '관리 키를 확인하고 있습니다.');
+  if (!/^\d{4}$/.test(pin)) { message(loginMessage, '숫자 4자리를 입력해 주세요.', true); return; }
+  message(loginMessage, '관리 비밀번호를 확인하고 있습니다.');
   try {
-    adminToken = setupToken || await openVault(pin);
-    const result = await api('list');
-    if (setupToken) {
-      await saveVault(adminToken, pin);
-      history.replaceState(null, '', `${location.pathname}${location.search}`);
-    }
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'login', pin })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.session) throw new Error(result.error || '관리 비밀번호를 확인하지 못했습니다.');
+    adminSession = result.session;
     document.querySelector('#admin-pin').value = '';
-    await showAdmin(result.posts || []);
-  } catch {
-    adminToken = '';
-    message(loginMessage, setupToken ? '관리 기기 등록에 실패했습니다.' : '비밀번호가 맞지 않거나 관리 기기 등록이 필요합니다.', true);
+    await showAdmin();
+  } catch (error) {
+    adminSession = '';
+    message(loginMessage, error.message || '관리 비밀번호가 맞지 않습니다.', true);
   }
 });
 
-document.querySelector('#logout-button').addEventListener('click', () => { adminToken = ''; location.reload(); });
+document.querySelector('#logout-button').addEventListener('click', () => { adminSession = ''; location.reload(); });
 sourceList.addEventListener('change', event => { if (!event.target.matches('input[type="checkbox"]')) return; const number = Number(event.target.value); event.target.checked ? selectedNumbers.add(number) : selectedNumbers.delete(number); selectionStatus(); });
 document.querySelector('#source-search').addEventListener('input', event => { const query = event.target.value.trim().toLocaleLowerCase('ko'); renderSources(sourceEntries.filter(item => `${item.source_no} ${item.title} ${item.body}`.toLocaleLowerCase('ko').includes(query))); });
 document.querySelector('#clear-selection').addEventListener('click', () => { selectedNumbers.clear(); renderSources(); selectionStatus(); });
@@ -147,4 +120,3 @@ document.querySelector('#edit-cancel').addEventListener('click', closeEdit);
 editModal.addEventListener('click', event => { if (event.target === editModal) closeEdit(); });
 
 if (!isConfigured) message(loginMessage, 'Supabase 프로젝트 연결이 필요합니다.', true);
-else if (!setupToken && !localStorage.getItem(vaultKey)) message(loginMessage, '최초 1회 관리 기기 등록이 필요합니다.', true);

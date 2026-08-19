@@ -8,14 +8,15 @@ const allowedOrigins = new Set([
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
-const tokenSalt = Deno.env.get("ADMIN_TOKEN_SALT")!;
-const expectedTokenHash = Deno.env.get("ADMIN_TOKEN_HASH")!;
+const pinSalt = Deno.env.get("ADMIN_PIN_SALT")!;
+const expectedPinHash = Deno.env.get("ADMIN_PIN_HASH")!;
+const sessionSecret = Deno.env.get("ADMIN_SESSION_SECRET")!;
 
 function cors(origin: string | null) {
   const safeOrigin = origin && allowedOrigins.has(origin) ? origin : "https://bujahyung.vercel.app";
   return {
     "Access-Control-Allow-Origin": safeOrigin,
-    "Access-Control-Allow-Headers": "content-type, x-admin-token",
+    "Access-Control-Allow-Headers": "content-type, x-admin-session",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
@@ -40,10 +41,61 @@ function constantTimeEqual(left: string, right: string) {
   return result === 0;
 }
 
-async function authorized(req: Request) {
-  const token = req.headers.get("x-admin-token") || "";
-  if (token.length < 40) return false;
-  return constantTimeEqual(await sha256(`${token}:${tokenSalt}`), expectedTokenHash);
+function base64Url(bytes: Uint8Array) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function decodeBase64Url(value: string) {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4);
+  return Uint8Array.from(atob(padded), character => character.charCodeAt(0));
+}
+
+async function hmac(value: string) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(sessionSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return base64Url(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value))));
+}
+
+async function createSession() {
+  const payload = base64Url(new TextEncoder().encode(JSON.stringify({ role: "admin", exp: Date.now() + 12 * 60 * 60 * 1000 })));
+  return `${payload}.${await hmac(payload)}`;
+}
+
+async function validSession(token: string) {
+  const [payload, signature] = token.split(".");
+  if (!payload || !signature || !constantTimeEqual(await hmac(payload), signature)) return false;
+  try {
+    const data = JSON.parse(new TextDecoder().decode(decodeBase64Url(payload)));
+    return data.role === "admin" && Number(data.exp) > Date.now();
+  } catch { return false; }
+}
+
+async function login(req: Request, origin: string | null, pin: string) {
+  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("cf-connecting-ip") || "unknown";
+  const identifier = await sha256(`${forwarded}|${req.headers.get("user-agent") || "unknown"}`);
+  const { data: attempt, error: readError } = await db.from("admin_login_attempts").select("*").eq("identifier", identifier).maybeSingle();
+  if (readError) return json(origin, { error: "로그인 보호 기능을 확인하지 못했습니다." }, 503);
+  const now = Date.now();
+  if (attempt?.blocked_until && new Date(attempt.blocked_until).getTime() > now) {
+    return json(origin, { error: "비밀번호 입력 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요." }, 429);
+  }
+  const pinHash = await sha256(`${pin}:${pinSalt}`);
+  if (!/^\d{4}$/.test(pin) || !constantTimeEqual(pinHash, expectedPinHash)) {
+    const withinWindow = attempt?.window_started_at && now - new Date(attempt.window_started_at).getTime() < 15 * 60 * 1000;
+    const failures = withinWindow ? Number(attempt.failures || 0) + 1 : 1;
+    const blockedUntil = failures >= 5 ? new Date(now + 60 * 60 * 1000).toISOString() : null;
+    await db.from("admin_login_attempts").upsert({
+      identifier,
+      failures,
+      window_started_at: withinWindow ? attempt.window_started_at : new Date(now).toISOString(),
+      blocked_until: blockedUntil,
+      updated_at: new Date(now).toISOString(),
+    });
+    return json(origin, { error: failures >= 5 ? "비밀번호 입력 횟수를 초과했습니다. 1시간 후 다시 시도해 주세요." : "관리 비밀번호가 맞지 않습니다." }, failures >= 5 ? 429 : 401);
+  }
+  await db.from("admin_login_attempts").delete().eq("identifier", identifier);
+  return json(origin, { session: await createSession() });
 }
 
 Deno.serve(async req => {
@@ -51,11 +103,12 @@ Deno.serve(async req => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
   if (req.method !== "POST") return json(origin, { error: "허용되지 않은 요청입니다." }, 405);
   if (origin && !allowedOrigins.has(origin)) return json(origin, { error: "허용되지 않은 출처입니다." }, 403);
-  if (!(await authorized(req))) return json(origin, { error: "관리 기기 인증이 필요합니다." }, 401);
 
   let payload: Record<string, unknown>;
   try { payload = await req.json(); } catch { return json(origin, { error: "요청 형식이 올바르지 않습니다." }, 400); }
   const action = String(payload.action || "");
+  if (action === "login") return login(req, origin, String(payload.pin || ""));
+  if (!(await validSession(req.headers.get("x-admin-session") || ""))) return json(origin, { error: "관리자 로그인이 필요합니다." }, 401);
 
   if (action === "list") {
     const { data, error } = await db.from("posts").select("*").order("source_no", { ascending: true });
