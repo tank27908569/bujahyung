@@ -242,5 +242,5 @@ if (!isConfigured) message(loginMessage, 'Supabase 프로젝트 연결이 필요
 else if (adminSession) showAdmin().catch(() => {
   adminSession = '';
   sessionStorage.removeItem(sessionKey);
-  message(loginMessage, '로그인 시간이 만료되었습니다. 다시 로그인해 주세요.', true);
+  message(loginMessage, '관리 시간이 만료되었습니다. 비밀번호를 다시 입력해 주세요.', true);
 });
