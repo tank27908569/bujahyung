@@ -127,9 +127,11 @@ Deno.serve(async req => {
     const category = String(payload.category || "");
     const title = String(payload.title || "").trim().slice(0, 300);
     const body = String(payload.body || "").trim().slice(0, 30000);
+    const sourceNo = Number(payload.source_no);
     if (!categories.has(category) || !title || !body) return json(origin, { error: "분류, 제목, 본문을 모두 입력해 주세요." }, 400);
     const { data, error } = await db.from("posts").insert({
       category,
+      source_no: Number.isInteger(sourceNo) && sourceNo > 0 ? sourceNo : null,
       title,
       body,
       is_published: payload.is_published !== false,
