@@ -4,6 +4,17 @@
 @media(max-width:480px){.hero h1{font-size:36px}.hero-actions{align-items:flex-start;flex-direction:column;gap:22px}.hero-frame{height:440px}.numbers strong{font-size:27px}.numbers p{font-size:10px;line-height:1.5}.book-cover{width:255px;height:370px}.book-cover h3{font-size:27px;margin-top:48px}.book-art{min-height:420px}.routine-image{height:420px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.reveal{opacity:1;transform:none;transition:none}}
 
+/* Business consultation bridge */
+.business-bridge{background:#e7e1d4;border-top:1px solid var(--line)}
+.business-bridge h2{font:400 clamp(38px,4.4vw,64px)/1.25 'Gowun Batang',serif;letter-spacing:-.06em;margin:22px 0}
+.business-bridge h2 i{font-style:normal;color:var(--red)}
+.business-bridge-grid{display:grid;grid-template-columns:1fr 1fr;gap:10vw;align-items:center}
+.business-bridge-copy>p{font:17px/2 'Gowun Batang';color:#59574f;margin:0 0 30px}
+.business-bridge-points{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:35px}
+.business-bridge-points span{padding:10px 14px;border:1px solid var(--line);font-size:11px;color:#625d54}
+.business-bridge .button{display:inline-flex}
+@media(max-width:900px){.business-bridge-grid{grid-template-columns:1fr;gap:30px}.business-bridge h2{font-size:39px}}
+
 /* Readability: principle descriptions */
 .principle p{font-size:16px;font-weight:400;color:#c5c1b8;line-height:1.9;letter-spacing:-.015em;max-width:800px}
 @media(max-width:900px){.principle p{font-size:15px}}

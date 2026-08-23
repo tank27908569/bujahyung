@@ -19,6 +19,7 @@ const loginPanel = document.querySelector('#login-panel');
 const adminApp = document.querySelector('#admin-app');
 const sourceList = document.querySelector('#source-list');
 const publishedList = document.querySelector('#published-list');
+const inquiryList = document.querySelector('#inquiry-list');
 const adminMessage = document.querySelector('#admin-message');
 const loginMessage = document.querySelector('#login-message');
 const editModal = document.querySelector('#edit-modal');
@@ -26,6 +27,7 @@ const sessionKey = 'bujahyung_admin_session';
 let adminSession = sessionStorage.getItem(sessionKey) || '';
 let sourceEntries = [];
 let posts = [];
+let inquiries = [];
 let selectedNumbers = new Set();
 
 function escapeHtml(value = '') {
@@ -92,6 +94,31 @@ function renderPosts() {
   publishedList.innerHTML = items.map(post => `<article class="published-item" data-id="${post.id}"><span>${post.source_no ? `#${post.source_no}` : 'NEW'}</span><div><small class="category-badge">${escapeHtml(categories[post.category] || post.category)}</small><h3>${escapeHtml(post.title)}</h3><p>${post.is_published ? '공개 중' : '비공개'} · ${new Date(post.updated_at || post.created_at).toLocaleDateString('ko-KR')}</p></div><div class="published-actions"><a class="secondary-button" href="${categoryPages[post.category] || 'index.html'}" target="_blank" rel="noopener">보기</a><button class="secondary-button" type="button" data-action="edit">수정</button><button class="secondary-button" type="button" data-action="toggle">${post.is_published ? '비공개' : '공개'}</button><button class="danger-button" type="button" data-action="delete">삭제</button></div></article>`).join('');
 }
 
+const inquiryServices = {
+  'auction-consulting': '경매 투자·사업 상담',
+  'lending-business': '대부업 사업 준비 상담',
+  other: '기타 사업 제안'
+};
+const inquiryStatuses = { new: '새 신청', contacted: '연락 완료', completed: '상담 완료', archived: '보관' };
+
+function renderInquiries() {
+  const filter = document.querySelector('#inquiry-status-filter').value;
+  const items = inquiries.filter(item => filter === 'all' || item.status === filter);
+  const newCount = inquiries.filter(item => item.status === 'new').length;
+  const countBadge = document.querySelector('#new-inquiry-count');
+  countBadge.hidden = newCount === 0;
+  countBadge.textContent = newCount;
+  if (!items.length) {
+    inquiryList.innerHTML = '<div class="empty-state"><strong>해당하는 상담 신청이 없습니다.</strong></div>';
+    return;
+  }
+  inquiryList.innerHTML = items.map(item => `<article class="inquiry-item" data-id="${item.id}">
+    <div class="inquiry-meta"><span>${escapeHtml(inquiryServices[item.service_type] || item.service_type)}</span><time datetime="${item.created_at}">${new Date(item.created_at).toLocaleString('ko-KR')}</time><small class="status-pill ${item.status}">${escapeHtml(inquiryStatuses[item.status] || item.status)}</small></div>
+    <div class="inquiry-content"><h3>${escapeHtml(item.name)}</h3><p class="inquiry-contact">${escapeHtml(item.phone)}</p><blockquote>${escapeHtml(item.message)}</blockquote>${item.preferred_contact_time ? `<p class="inquiry-time">연락 가능 시간 · ${escapeHtml(item.preferred_contact_time)}</p>` : ''}</div>
+    <div class="inquiry-actions"><select aria-label="상담 처리 상태">${Object.entries(inquiryStatuses).map(([value, label]) => `<option value="${value}" ${item.status === value ? 'selected' : ''}>${label}</option>`).join('')}</select><button class="secondary-button" type="button" data-action="save-inquiry">상태 저장</button><button class="danger-button" type="button" data-action="delete-inquiry">삭제</button></div>
+  </article>`).join('');
+}
+
 async function loadSources() {
   const response = await fetch('data/thread-seodang.json');
   if (!response.ok) throw new Error('스레드 원고 목록을 읽지 못했습니다.');
@@ -105,8 +132,13 @@ async function loadPosts(preloaded) {
   renderSources();
 }
 
+async function loadInquiries(preloaded) {
+  inquiries = preloaded || (await api('list-inquiries')).inquiries || [];
+  renderInquiries();
+}
+
 async function showAdmin(preloaded) {
-  await Promise.all([loadSources(), loadPosts(preloaded)]);
+  await Promise.all([loadSources(), loadPosts(preloaded), loadInquiries()]);
   loginPanel.style.display = 'none';
   adminApp.classList.add('active');
   document.querySelector('#logout-button').hidden = false;
@@ -193,6 +225,29 @@ document.querySelectorAll('.admin-tab').forEach(tab => tab.addEventListener('cli
 }));
 document.querySelector('#post-category-filter').addEventListener('change', renderPosts);
 document.querySelector('#published-search').addEventListener('input', renderPosts);
+document.querySelector('#inquiry-status-filter').addEventListener('change', renderInquiries);
+
+inquiryList.addEventListener('click', async event => {
+  const button = event.target.closest('button[data-action]');
+  const item = event.target.closest('.inquiry-item');
+  if (!button || !item) return;
+  const inquiry = inquiries.find(entry => entry.id === item.dataset.id);
+  if (!inquiry) return;
+  if (button.dataset.action === 'save-inquiry') {
+    try {
+      await api('update-inquiry', { id: inquiry.id, status: item.querySelector('select').value });
+      await loadInquiries();
+      message(adminMessage, '상담 처리 상태를 저장했습니다.');
+    } catch (error) { message(adminMessage, error.message, true); }
+  }
+  if (button.dataset.action === 'delete-inquiry' && confirm(`${inquiry.name}님의 상담 신청을 삭제하시겠습니까?`)) {
+    try {
+      await api('delete-inquiry', { id: inquiry.id });
+      await loadInquiries();
+      message(adminMessage, '상담 신청을 삭제했습니다.');
+    } catch (error) { message(adminMessage, error.message, true); }
+  }
+});
 
 publishedList.addEventListener('click', async event => {
   const button = event.target.closest('button[data-action]');

@@ -18,6 +18,7 @@ const categories = new Set([
   "auction-stories",
   "life-stories",
 ]);
+const inquiryStatuses = new Set(["new", "contacted", "completed", "archived"]);
 
 function cors(origin: string | null) {
   const safeOrigin = origin && allowedOrigins.has(origin) ? origin : "https://bujahyung.vercel.app";
@@ -122,6 +123,23 @@ Deno.serve(async req => {
   if (action === "list") {
     const { data, error } = await db.from("posts").select("*").order("updated_at", { ascending: false });
     return error ? json(origin, { error: error.message }, 400) : json(origin, { posts: data });
+  }
+  if (action === "list-inquiries") {
+    const { data, error } = await db.from("consultation_inquiries")
+      .select("id, service_type, name, phone, preferred_contact_time, message, status, created_at, updated_at")
+      .order("created_at", { ascending: false });
+    return error ? json(origin, { error: error.message }, 400) : json(origin, { inquiries: data });
+  }
+  if (action === "update-inquiry") {
+    const id = String(payload.id || "");
+    const status = String(payload.status || "");
+    if (!id || !inquiryStatuses.has(status)) return json(origin, { error: "처리 상태가 올바르지 않습니다." }, 400);
+    const { error } = await db.from("consultation_inquiries").update({ status }).eq("id", id);
+    return error ? json(origin, { error: error.message }, 400) : json(origin, { ok: true });
+  }
+  if (action === "delete-inquiry") {
+    const { error } = await db.from("consultation_inquiries").delete().eq("id", String(payload.id || ""));
+    return error ? json(origin, { error: error.message }, 400) : json(origin, { ok: true });
   }
   if (action === "create") {
     const category = String(payload.category || "");

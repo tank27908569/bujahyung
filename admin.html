@@ -33,7 +33,7 @@
 
     <section id="admin-app" class="admin-app">
       <div class="admin-head">
-        <div><p class="portal-eyebrow">BUJAHYUNG CONTENT CMS</p><h1 class="admin-title">부자형 글 관리</h1><p>다섯 가지 분류에 새 글을 쓰고, 공개 여부와 내용을 관리할 수 있습니다.</p></div>
+        <div><p class="portal-eyebrow">BUJAHYUNG CONTENT CMS</p><h1 class="admin-title">부자형 통합 관리</h1><p>게시 글과 사업 상담 신청을 한 화면에서 관리할 수 있습니다.</p></div>
         <a class="secondary-button" href="index.html#contents" target="_blank" rel="noopener">공개 화면 확인 ↗</a>
       </div>
       <div id="admin-message" aria-live="polite"></div>
@@ -41,6 +41,7 @@
         <button class="admin-tab active" type="button" data-view="create">새 글 작성</button>
         <button class="admin-tab" type="button" data-view="sources">스레드 원고 선택</button>
         <button class="admin-tab" type="button" data-view="published">전체 글 관리</button>
+        <button class="admin-tab" type="button" data-view="inquiries">상담 신청 관리 <span id="new-inquiry-count" class="tab-count" hidden></span></button>
       </div>
 
       <section id="view-create" class="admin-view active">
@@ -68,6 +69,14 @@
           <label class="search-box"><span class="sr-only">게시 글 검색</span><input id="published-search" type="search" placeholder="제목 또는 본문 검색"></label>
         </div>
         <div id="published-list" class="published-list"><div class="loading">게시 글을 불러오고 있습니다.</div></div>
+      </section>
+
+      <section id="view-inquiries" class="admin-view">
+        <div class="source-toolbar">
+          <div><h2 class="view-title">사업 상담 신청</h2><p class="view-description">신청자에게 연락한 뒤 처리 상태를 변경하세요.</p></div>
+          <label class="form-field inline-field"><span class="sr-only">상담 상태 선택</span><select id="inquiry-status-filter"><option value="all">전체 상태</option><option value="new">새 신청</option><option value="contacted">연락 완료</option><option value="completed">상담 완료</option><option value="archived">보관</option></select></label>
+        </div>
+        <div id="inquiry-list" class="inquiry-list"><div class="loading">상담 신청을 불러오고 있습니다.</div></div>
       </section>
     </section>
   </main>
