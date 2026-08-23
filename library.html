@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="경매하는 부자형 유영수의 서재. 책에서 발견한 생각을 삶과 경매 현장에 연결합니다.">
+  <meta name="theme-color" content="#171815">
+  <title>부자형의 서재 | 경매하는 부자형</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body class="library-page">
+  <div class="portal-grain" aria-hidden="true"></div>
+  <header class="portal-header">
+    <a class="portal-brand" href="index.html"><span class="portal-mark">富</span><span>경매하는 부자형</span></a>
+    <nav class="portal-nav" aria-label="부자형의 서재 메뉴">
+      <a href="index.html">브랜드 홈</a>
+      <a href="seodang.html">스레드 서당</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="portal-hero">
+      <p class="portal-eyebrow">BOOKS × THOUGHTS</p>
+      <h1>부자형의 서재</h1>
+      <p>읽은 것을 삶에 남기는 법. 책에서 발견한 생각을 경매 현장과 살아온 경험에 비추어 나눕니다.</p>
+    </section>
+
+    <section class="portal-shell">
+      <div class="toolbar">
+        <h2>서재의 기록</h2>
+        <label class="search-box"><span class="sr-only">서재 글 검색</span><input id="post-search" type="search" placeholder="책 또는 문장 검색"></label>
+      </div>
+      <div id="post-grid" class="post-grid"></div>
+    </section>
+  </main>
+
+  <div id="reader-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="reader-title">
+    <article class="modal-panel">
+      <button class="modal-close" type="button" aria-label="닫기">×</button>
+      <span id="reader-no" class="reader-no"></span>
+      <h2 id="reader-title" class="reader-title"></h2>
+      <div id="reader-body" class="reader-body"></div>
+    </article>
+  </div>
+
+  <footer class="portal-footer"><span>경매하는 부자형 · 유영수</span><span>© <span id="year"></span> BUJAHYUNG</span></footer>
+  <script src="data/library.js"></script>
+  <script src="library.js"></script>
+</body>
+</html>
