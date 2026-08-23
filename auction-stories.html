@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="경매하는 부자형 유영수의 경매실전 이야기. 책에는 없는 현장의 판단과 경험.">
+  <meta name="theme-color" content="#171815">
+  <title>경매실전 이야기 | 경매하는 부자형</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body class="category-page field-page" data-category="auction-stories" data-section-label="AUCTION FIELD NOTES">
+  <div class="portal-grain" aria-hidden="true"></div>
+  <header class="portal-header"><a class="portal-brand" href="index.html"><span class="portal-mark">富</span><span>경매하는 부자형</span></a><nav class="portal-nav" aria-label="경매실전 이야기 메뉴"><a href="index.html">브랜드 홈</a><a class="admin-link" href="admin.html">관리자</a></nav></header>
+  <main>
+    <section class="portal-hero"><p class="portal-eyebrow">AUCTION × FIELD</p><h1>경매실전 이야기</h1><p>29년 법원경매 현장에서 직접 부딪치며 얻은 판단과 경험을 기록합니다.</p></section>
+    <section class="portal-shell"><div id="reader-notice" aria-live="polite"></div><div class="toolbar"><h2>현장의 기록</h2><label class="search-box"><span class="sr-only">글 검색</span><input id="post-search" type="search" placeholder="사건 또는 문장 검색"></label></div><div id="post-grid" class="post-grid"><div class="loading">글을 불러오고 있습니다.</div></div></section>
+  </main>
+  <div id="reader-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="reader-title"><article class="modal-panel"><button class="modal-close" type="button" aria-label="닫기">×</button><span id="reader-no" class="reader-no"></span><h2 id="reader-title" class="reader-title"></h2><div id="reader-body" class="reader-body"></div></article></div>
+  <footer class="portal-footer"><span>경매하는 부자형 · 유영수</span><span>© <span id="year"></span> BUJAHYUNG</span></footer>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js"></script><script src="content.js"></script>
+</body>
+</html>

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#171815">
-  <title>스레드 서당 관리 | 경매하는 부자형</title>
+  <title>글 관리 | 경매하는 부자형</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,8 +15,8 @@
 <body>
   <div class="portal-grain" aria-hidden="true"></div>
   <header class="portal-header">
-    <a class="portal-brand" href="index.html"><span class="portal-mark">富</span><span>스레드 서당 관리</span></a>
-    <nav class="portal-nav"><a href="seodang.html">공개 페이지 보기</a><button id="logout-button" class="link-button" type="button" hidden>로그아웃</button></nav>
+    <a class="portal-brand" href="index.html"><span class="portal-mark">富</span><span>부자형 글 관리</span></a>
+    <nav class="portal-nav"><a href="index.html#contents">공개 페이지 보기</a><button id="logout-button" class="link-button" type="button" hidden>로그아웃</button></nav>
   </header>
 
   <main class="admin-shell">
@@ -33,16 +33,27 @@
 
     <section id="admin-app" class="admin-app">
       <div class="admin-head">
-        <div><p class="portal-eyebrow">THREAD SEODANG CMS</p><h1 class="admin-title">스레드 서당 글 관리</h1><p>원고를 골라 게시하고, 공개된 글을 수정하거나 삭제할 수 있습니다.</p></div>
-        <a class="secondary-button" href="seodang.html" target="_blank" rel="noopener">공개 화면 확인 ↗</a>
+        <div><p class="portal-eyebrow">BUJAHYUNG CONTENT CMS</p><h1 class="admin-title">부자형 글 관리</h1><p>다섯 가지 분류에 새 글을 쓰고, 공개 여부와 내용을 관리할 수 있습니다.</p></div>
+        <a class="secondary-button" href="index.html#contents" target="_blank" rel="noopener">공개 화면 확인 ↗</a>
       </div>
       <div id="admin-message" aria-live="polite"></div>
       <div class="admin-tabs" role="tablist">
-        <button class="admin-tab active" type="button" data-view="sources">원고에서 선택</button>
-        <button class="admin-tab" type="button" data-view="published">게시 글 관리</button>
+        <button class="admin-tab active" type="button" data-view="create">새 글 작성</button>
+        <button class="admin-tab" type="button" data-view="sources">스레드 원고 선택</button>
+        <button class="admin-tab" type="button" data-view="published">전체 글 관리</button>
       </div>
 
-      <section id="view-sources" class="admin-view active">
+      <section id="view-create" class="admin-view active">
+        <form id="create-form" class="editor-form">
+          <div class="form-field"><label for="create-category">글 분류</label><select id="create-category" required></select></div>
+          <div class="form-field"><label for="create-title">제목</label><input id="create-title" type="text" maxlength="300" required></div>
+          <div class="form-field"><label for="create-body">본문</label><textarea id="create-body" maxlength="30000" placeholder="글 내용을 입력하세요." required></textarea></div>
+          <label class="check-field"><input id="create-published" type="checkbox" checked><span>작성과 동시에 공개</span></label>
+          <div class="button-row"><button class="primary-button" type="submit">새 글 저장</button><button id="create-reset" class="secondary-button" type="reset">입력 지우기</button></div>
+        </form>
+      </section>
+
+      <section id="view-sources" class="admin-view">
         <div class="source-toolbar">
           <label class="search-box"><span class="sr-only">원고 검색</span><input id="source-search" type="search" placeholder="번호·성어·문장 검색"></label>
           <button id="clear-selection" class="secondary-button" type="button">선택 해제</button>
@@ -52,6 +63,10 @@
       </section>
 
       <section id="view-published" class="admin-view">
+        <div class="source-toolbar">
+          <label class="form-field inline-field"><span class="sr-only">분류 선택</span><select id="post-category-filter"></select></label>
+          <label class="search-box"><span class="sr-only">게시 글 검색</span><input id="published-search" type="search" placeholder="제목 또는 본문 검색"></label>
+        </div>
         <div id="published-list" class="published-list"><div class="loading">게시 글을 불러오고 있습니다.</div></div>
       </section>
     </section>
@@ -63,6 +78,7 @@
       <p class="portal-eyebrow">EDIT POST</p>
       <h2 id="edit-heading" class="admin-title">글 수정</h2>
       <input id="edit-id" type="hidden">
+      <div class="form-field"><label for="edit-category">글 분류</label><select id="edit-category" required></select></div>
       <div class="form-field"><label for="edit-title">제목</label><input id="edit-title" type="text" required></div>
       <div class="form-field"><label for="edit-body">본문</label><textarea id="edit-body" required></textarea></div>
       <div class="button-row"><button class="primary-button" type="submit">수정 내용 저장</button><button id="edit-cancel" class="secondary-button" type="button">취소</button></div>

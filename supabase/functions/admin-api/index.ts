@@ -11,6 +11,13 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 const pinSalt = Deno.env.get("ADMIN_PIN_SALT")!;
 const expectedPinHash = Deno.env.get("ADMIN_PIN_HASH")!;
 const sessionSecret = Deno.env.get("ADMIN_SESSION_SECRET")!;
+const categories = new Set([
+  "thread-seodang",
+  "library",
+  "love-auction-philosophy",
+  "auction-stories",
+  "life-stories",
+]);
 
 function cors(origin: string | null) {
   const safeOrigin = origin && allowedOrigins.has(origin) ? origin : "https://bujahyung.vercel.app";
@@ -113,13 +120,28 @@ Deno.serve(async req => {
   if (!(await validSession(req.headers.get("x-admin-session") || ""))) return json(origin, { error: "관리자 로그인이 필요합니다." }, 401);
 
   if (action === "list") {
-    const { data, error } = await db.from("posts").select("*").order("source_no", { ascending: true });
+    const { data, error } = await db.from("posts").select("*").order("updated_at", { ascending: false });
     return error ? json(origin, { error: error.message }, 400) : json(origin, { posts: data });
+  }
+  if (action === "create") {
+    const category = String(payload.category || "");
+    const title = String(payload.title || "").trim().slice(0, 300);
+    const body = String(payload.body || "").trim().slice(0, 30000);
+    if (!categories.has(category) || !title || !body) return json(origin, { error: "분류, 제목, 본문을 모두 입력해 주세요." }, 400);
+    const { data, error } = await db.from("posts").insert({
+      category,
+      title,
+      body,
+      is_published: payload.is_published !== false,
+      published_at: new Date().toISOString(),
+    }).select("*").single();
+    return error ? json(origin, { error: error.message }, 400) : json(origin, { ok: true, post: data });
   }
   if (action === "publish") {
     const posts = Array.isArray(payload.posts) ? payload.posts.slice(0, 30) : [];
     const clean = posts.map((post: Record<string, unknown>) => ({
       source_no: Number(post.source_no),
+      category: "thread-seodang",
       title: String(post.title || "").slice(0, 300),
       body: String(post.body || "").slice(0, 30000),
       is_published: true,
@@ -136,6 +158,7 @@ Deno.serve(async req => {
     if (typeof changes.title === "string") clean.title = changes.title.slice(0, 300);
     if (typeof changes.body === "string") clean.body = changes.body.slice(0, 30000);
     if (typeof changes.is_published === "boolean") clean.is_published = changes.is_published;
+    if (typeof changes.category === "string" && categories.has(changes.category)) clean.category = changes.category;
     const { error } = await db.from("posts").update(clean).eq("id", id);
     return error ? json(origin, { error: error.message }, 400) : json(origin, { ok: true });
   }

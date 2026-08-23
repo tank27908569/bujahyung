@@ -1,9 +1,34 @@
-window.BUJAHYUNG_LIBRARY_POSTS = [
-  {
-    id: "library-001",
-    source_no: 1,
-    title: "안톤 체호프 《드라마》",
-    body: `경매나 하는 사람이 갑자기 책 얘기를 한다.
+alter table public.posts
+  add column if not exists category text not null default 'thread-seodang';
+
+alter table public.posts
+  drop constraint if exists posts_category_check;
+
+alter table public.posts
+  add constraint posts_category_check check (category in (
+    'thread-seodang',
+    'library',
+    'love-auction-philosophy',
+    'auction-stories',
+    'life-stories'
+  ));
+
+alter table public.posts
+  drop constraint if exists posts_source_no_key;
+
+create unique index if not exists posts_category_source_no_key
+  on public.posts (category, source_no)
+  where source_no is not null;
+
+create index if not exists posts_category_published_at_idx
+  on public.posts (category, published_at desc);
+
+insert into public.posts (category, source_no, title, body, is_published, published_at)
+select
+  'library',
+  1,
+  '안톤 체호프 《드라마》',
+  $article$경매나 하는 사람이 갑자기 책 얘기를 한다.
 어색하다는 거 안다.
 학창시절엔 선생님 강요로, 시험 때문에 읽었다.
 인생 좀 살아보니 느낌이 다르게 온다.
@@ -54,7 +79,10 @@ window.BUJAHYUNG_LIBRARY_POSTS = [
 시간은
 값을 매길 수 없는 자산이지.
 
-숫자보다 먼저 계산해야 하는 게 시간이야.`,
-    published_at: "2026-08-23T15:09:10+09:00"
-  }
-];
+숫자보다 먼저 계산해야 하는 게 시간이야.$article$,
+  true,
+  '2026-08-23T15:09:10+09:00'::timestamptz
+where not exists (
+  select 1 from public.posts
+  where category = 'library' and source_no = 1
+);

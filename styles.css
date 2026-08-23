@@ -22,3 +22,10 @@
 .book-meta a:hover b{transform:translate(2px,-2px)}
 @media(max-width:900px){.book-art.books-display{min-height:auto;padding:10px 0 60px;gap:16px}.book-volume{width:min(46%,210px)}.book-volume-second{transform:translateY(28px)}.book-meta{align-items:flex-start;flex-direction:column;margin-top:16px}.book-meta a{font-size:11px}}
 .content-card{text-decoration:none}
+.content-cards{grid-template-columns:repeat(6,1fr)}
+.content-card{grid-column:span 2}
+.content-card:nth-child(n+4){grid-column:span 3}
+.content-card.paper{background:#ded6c7;color:var(--ink)}
+.content-card.paper div p,.content-card.paper div span{color:#6f5548}
+.content-card.gold{background:#6f5a3c}
+@media(max-width:900px){.content-cards{grid-template-columns:1fr}.content-card,.content-card:nth-child(n+4){grid-column:auto}}

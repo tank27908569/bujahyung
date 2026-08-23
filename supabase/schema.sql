@@ -7,7 +7,8 @@ create table if not exists public.admins (
 
 create table if not exists public.posts (
   id uuid primary key default gen_random_uuid(),
-  source_no integer unique,
+  source_no integer,
+  category text not null default 'thread-seodang' check (category in ('thread-seodang', 'library', 'love-auction-philosophy', 'auction-stories', 'life-stories')),
   title text not null check (char_length(title) between 1 and 300),
   body text not null check (char_length(body) between 1 and 30000),
   is_published boolean not null default true,
@@ -105,6 +106,8 @@ grant insert, update, delete on public.posts to authenticated;
 
 create index if not exists posts_published_at_idx on public.posts (published_at desc);
 create index if not exists posts_source_no_idx on public.posts (source_no);
+create unique index if not exists posts_category_source_no_key on public.posts (category, source_no) where source_no is not null;
+create index if not exists posts_category_published_at_idx on public.posts (category, published_at desc);
 
 
 create table if not exists public.admin_login_attempts (
