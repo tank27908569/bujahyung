@@ -5,7 +5,15 @@ const allowedOrigins = new Set([
   "http://localhost:4173",
   "http://127.0.0.1:4173",
 ]);
-const allowedServices = new Set(["auction-consulting", "lending-business", "other"]);
+const allowedServices = new Set([
+  "auction-consulting",
+  "auction-course",
+  "property-recommendation",
+  "property-consulting",
+  "winning-bid-consulting",
+  "lending-business",
+  "other",
+]);
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false, autoRefreshToken: false },
 });

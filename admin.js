@@ -96,6 +96,10 @@ function renderPosts() {
 
 const inquiryServices = {
   'auction-consulting': '경매 투자·사업 상담',
+  'auction-course': '경매강의',
+  'property-recommendation': '경매 물건추천',
+  'property-consulting': '경매 물건상담',
+  'winning-bid-consulting': '낙찰컨설팅',
   'lending-business': '대부업 사업 준비 상담',
   other: '기타 사업 제안'
 };
