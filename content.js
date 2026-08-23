@@ -34,12 +34,45 @@ function render(items) {
     </article>`).join('');
 }
 
+function readableParagraphs(value = '') {
+  const lines = String(value).replace(/\u00a0/g, ' ').split(/\r?\n/).map(line => line
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s+([,.!?…])/g, '$1')
+    .replace(/([“‘(])\s+/g, '$1')
+    .replace(/\s+([”’)]|$)/g, '$1')
+    .trim());
+  const paragraphs = [];
+  let current = [];
+  const flush = () => {
+    if (current.length) paragraphs.push(current.join('\n'));
+    current = [];
+  };
+  lines.forEach(line => {
+    if (!line) { flush(); return; }
+    current.push(line);
+    const sentenceEnd = /[.!?。！？…"'’”)]$/.test(line);
+    if ((sentenceEnd && current.length >= 2) || current.length >= 4) flush();
+  });
+  flush();
+  return paragraphs;
+}
+
+function renderReaderBody(value) {
+  const readerBody = document.querySelector('#reader-body');
+  readerBody.replaceChildren();
+  readableParagraphs(value).forEach(paragraph => {
+    const node = document.createElement('p');
+    node.textContent = paragraph;
+    readerBody.appendChild(node);
+  });
+}
+
 function openPost(id) {
   const post = posts.find(item => item.id === id);
   if (!post) return;
   document.querySelector('#reader-no').textContent = sectionLabel;
   document.querySelector('#reader-title').textContent = post.title;
-  document.querySelector('#reader-body').textContent = post.body;
+  renderReaderBody(post.body);
   modal.classList.add('open');
   document.body.style.overflow = 'hidden';
 }
