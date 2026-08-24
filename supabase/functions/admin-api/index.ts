@@ -159,6 +159,28 @@ Deno.serve(async req => {
     }).select("*").single();
     return error ? json(origin, { error: error.message }, 400) : json(origin, { ok: true, post: data });
   }
+  if (action === "bulk-create-life-stories") {
+    const posts = Array.isArray(payload.posts) ? payload.posts.slice(0, 100) : [];
+    const clean = posts.map((post: Record<string, unknown>) => {
+      const publishedAt = String(post.published_at || "");
+      const sourceNo = Number(post.source_no);
+      return {
+        external_id: String(post.external_id || "").trim().slice(0, 100),
+        source_no: sourceNo,
+        category: "life-stories",
+        title: String(post.title || "").trim().slice(0, 300),
+        body: String(post.body || "").trim().slice(0, 30000),
+        is_published: true,
+        published_at: Number.isNaN(Date.parse(publishedAt)) ? "" : new Date(publishedAt).toISOString(),
+      };
+    }).filter(post => post.external_id && Number.isInteger(post.source_no) && post.source_no > 0 && post.title && post.body && post.published_at);
+    if (!clean.length || clean.length !== posts.length) return json(origin, { error: "일괄 게시할 글의 형식이 올바르지 않습니다." }, 400);
+    const { error } = await db.from("posts").upsert(clean, {
+      onConflict: "category,external_id",
+      ignoreDuplicates: true,
+    });
+    return error ? json(origin, { error: error.message }, 400) : json(origin, { ok: true, count: clean.length });
+  }
   if (action === "publish") {
     const posts = Array.isArray(payload.posts) ? payload.posts.slice(0, 30) : [];
     const clean = posts.map((post: Record<string, unknown>) => ({
