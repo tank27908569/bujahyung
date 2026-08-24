@@ -9,3 +9,11 @@
 .reader-body{white-space:normal}.reader-body p{white-space:pre-line;margin:0 0 1.55em}.reader-body p:last-child{margin-bottom:0}
 .tab-count{display:inline-grid;place-items:center;min-width:19px;height:19px;margin-left:5px;padding:0 5px;border-radius:10px;background:var(--red);color:#fff;font-size:9px}.view-title{font:400 25px 'Gowun Batang';margin:0}.view-description{margin:6px 0 0;color:var(--muted);font-size:11px}.inquiry-list{display:grid;gap:12px}.inquiry-item{background:#e8e3d8;border:1px solid var(--line);padding:22px;display:grid;grid-template-columns:150px 1fr auto;gap:24px;align-items:start}.inquiry-meta span,.inquiry-meta time{display:block}.inquiry-meta span{font-size:10px;letter-spacing:.08em;color:var(--red);font-weight:700}.inquiry-meta time{font-size:10px;color:var(--muted);margin-top:8px}.inquiry-content h3{font:400 21px 'Gowun Batang';margin:0 0 8px}.inquiry-contact{font-size:12px;color:var(--red);font-weight:600;margin:0 0 12px}.inquiry-content blockquote{font:12px/1.8 'Noto Sans KR';color:#57554f;border:0;margin:0;padding:15px;background:rgba(255,255,255,.35);white-space:pre-line}.inquiry-time{font-size:10px;color:var(--muted);margin:10px 0 0}.inquiry-actions{display:flex;flex-direction:column;gap:7px;min-width:120px}.inquiry-actions select{border:1px solid var(--line);background:var(--paper);padding:9px;font-size:11px}.inquiry-actions button{padding:9px 11px}.status-pill{display:inline-block;margin-top:12px;padding:5px 8px;background:#d9d2c4;color:#58554f;font-size:9px}.status-pill.new{background:#ead8d4;color:var(--red)}
 @media(max-width:760px){.inquiry-item{grid-template-columns:1fr}.inquiry-actions{flex-direction:row;flex-wrap:wrap}.inquiry-actions select{flex:1}}
+
+/* Library reader: larger, calmer type on phones */
+@media(max-width:680px){
+  .library-page .modal-panel{padding:46px 24px 34px}
+  .library-page .reader-title{font-size:31px;line-height:1.45;margin-bottom:32px}
+  .library-page .reader-body{font-size:19px;line-height:2.08;letter-spacing:-.012em;color:#3f3d38}
+  .library-page .reader-body p{margin-bottom:1.75em}
+}
