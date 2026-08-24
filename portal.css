@@ -17,6 +17,12 @@
   .library-page .reader-body{font-size:19px;line-height:2.08;letter-spacing:-.012em;color:#3f3d38}
   .library-page .reader-body p{margin-bottom:1.75em}
 }
+@media(max-width:680px){
+  .seodang-page .modal-panel{padding:46px 24px 34px}
+  .seodang-page .reader-title{font-size:31px;line-height:1.45;margin-bottom:32px}
+  .seodang-page .reader-body{font-size:19px;line-height:2.08;letter-spacing:-.012em;color:#3f3d38}
+  .seodang-page .reader-body p{margin-bottom:1.75em}
+}
 .reader-cover{position:relative;margin:0 0 38px;background:#18130d;overflow:hidden}
 .reader-cover img{display:block;width:100%;height:auto;aspect-ratio:4/5;object-fit:cover}
 .reader-cover figcaption{position:absolute;left:0;right:0;bottom:0;margin:0;padding:80px 34px 30px;background:linear-gradient(transparent,rgba(12,9,6,.94));color:#f1e4c7;text-align:center;font:700 clamp(21px,3.2vw,30px)/1.55 'Gowun Batang',serif;text-shadow:0 2px 12px rgba(0,0,0,.7)}
