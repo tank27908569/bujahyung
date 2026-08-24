@@ -49,6 +49,8 @@
           <div class="form-field"><label for="create-category">글 분류</label><select id="create-category" required></select></div>
           <div class="form-field"><label for="create-title">제목</label><input id="create-title" type="text" maxlength="300" required></div>
           <div class="form-field"><label for="create-body">본문</label><textarea id="create-body" maxlength="30000" placeholder="글 내용을 입력하세요." required></textarea></div>
+          <div class="form-field"><label for="create-cover-image">대표 그림 주소 <small>선택</small></label><input id="create-cover-image" type="text" maxlength="500" placeholder="예: assets/library-01.webp"></div>
+          <div class="form-field"><label for="create-cover-quote">그림 위 핵심 문장 <small>선택</small></label><input id="create-cover-quote" type="text" maxlength="200" placeholder="스마트폰에서도 읽기 쉬운 짧은 문장"></div>
           <label class="check-field"><input id="create-published" type="checkbox" checked><span>작성과 동시에 공개</span></label>
           <div class="button-row"><button class="primary-button" type="submit">새 글 저장</button><button id="create-reset" class="secondary-button" type="reset">입력 지우기</button></div>
         </form>
@@ -90,6 +92,8 @@
       <div class="form-field"><label for="edit-category">글 분류</label><select id="edit-category" required></select></div>
       <div class="form-field"><label for="edit-title">제목</label><input id="edit-title" type="text" required></div>
       <div class="form-field"><label for="edit-body">본문</label><textarea id="edit-body" required></textarea></div>
+      <div class="form-field"><label for="edit-cover-image">대표 그림 주소 <small>선택</small></label><input id="edit-cover-image" type="text" maxlength="500"></div>
+      <div class="form-field"><label for="edit-cover-quote">그림 위 핵심 문장 <small>선택</small></label><input id="edit-cover-quote" type="text" maxlength="200"></div>
       <div class="button-row"><button class="primary-button" type="submit">수정 내용 저장</button><button id="edit-cancel" class="secondary-button" type="button">취소</button></div>
     </form>
   </div>

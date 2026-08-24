@@ -152,6 +152,8 @@ Deno.serve(async req => {
       source_no: Number.isInteger(sourceNo) && sourceNo > 0 ? sourceNo : null,
       title,
       body,
+      cover_image_url: String(payload.cover_image_url || "").trim().slice(0, 500) || null,
+      cover_quote: String(payload.cover_quote || "").trim().slice(0, 200) || null,
       is_published: payload.is_published !== false,
       published_at: new Date().toISOString(),
     }).select("*").single();
@@ -177,6 +179,8 @@ Deno.serve(async req => {
     const clean: Record<string, unknown> = {};
     if (typeof changes.title === "string") clean.title = changes.title.slice(0, 300);
     if (typeof changes.body === "string") clean.body = changes.body.slice(0, 30000);
+    if (typeof changes.cover_image_url === "string") clean.cover_image_url = changes.cover_image_url.trim().slice(0, 500) || null;
+    if (typeof changes.cover_quote === "string") clean.cover_quote = changes.cover_quote.trim().slice(0, 200) || null;
     if (typeof changes.is_published === "boolean") clean.is_published = changes.is_published;
     if (typeof changes.category === "string" && categories.has(changes.category)) clean.category = changes.category;
     const { error } = await db.from("posts").update(clean).eq("id", id);

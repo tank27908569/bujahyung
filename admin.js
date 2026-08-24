@@ -185,6 +185,8 @@ document.querySelector('#create-form').addEventListener('submit', async event =>
     category: document.querySelector('#create-category').value,
     title: document.querySelector('#create-title').value.trim(),
     body: document.querySelector('#create-body').value.trim(),
+    cover_image_url: document.querySelector('#create-cover-image').value.trim(),
+    cover_quote: document.querySelector('#create-cover-quote').value.trim(),
     is_published: document.querySelector('#create-published').checked
   };
   try {
@@ -264,6 +266,8 @@ publishedList.addEventListener('click', async event => {
     document.querySelector('#edit-category').value = post.category;
     document.querySelector('#edit-title').value = post.title;
     document.querySelector('#edit-body').value = post.body;
+    document.querySelector('#edit-cover-image').value = post.cover_image_url || '';
+    document.querySelector('#edit-cover-quote').value = post.cover_quote || '';
     editModal.classList.add('open');
   }
   if (button.dataset.action === 'toggle') {
@@ -282,7 +286,9 @@ document.querySelector('#edit-form').addEventListener('submit', async event => {
   const changes = {
     category: document.querySelector('#edit-category').value,
     title: document.querySelector('#edit-title').value.trim(),
-    body: document.querySelector('#edit-body').value.trim()
+    body: document.querySelector('#edit-body').value.trim(),
+    cover_image_url: document.querySelector('#edit-cover-image').value.trim(),
+    cover_quote: document.querySelector('#edit-cover-quote').value.trim()
   };
   try {
     await api('update', { id, changes });

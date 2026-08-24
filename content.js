@@ -67,11 +67,34 @@ function renderReaderBody(value) {
   });
 }
 
+function renderReaderCover(post) {
+  let cover = document.querySelector('#reader-cover');
+  if (!cover) {
+    cover = document.createElement('figure');
+    cover.id = 'reader-cover';
+    cover.className = 'reader-cover';
+    cover.innerHTML = '<img alt=""><figcaption></figcaption>';
+    document.querySelector('#reader-body').before(cover);
+  }
+  if (!post.cover_image_url) {
+    cover.hidden = true;
+    return;
+  }
+  cover.hidden = false;
+  const image = cover.querySelector('img');
+  image.src = post.cover_image_url;
+  image.alt = `${post.title} 대표 그림`;
+  const caption = cover.querySelector('figcaption');
+  caption.textContent = post.cover_quote || '';
+  caption.hidden = !post.cover_quote;
+}
+
 function openPost(id) {
   const post = posts.find(item => item.id === id);
   if (!post) return;
   document.querySelector('#reader-no').textContent = sectionLabel;
   document.querySelector('#reader-title').textContent = post.title;
+  renderReaderCover(post);
   renderReaderBody(post.body);
   modal.classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -89,7 +112,7 @@ async function loadPosts() {
     return;
   }
   const client = window.supabase.createClient(config.url, config.anonKey);
-  const { data, error } = await client.from('posts').select('id, source_no, title, body, published_at').eq('category', category).eq('is_published', true).order('published_at', { ascending: false });
+  const { data, error } = await client.from('posts').select('id, source_no, title, body, cover_image_url, cover_quote, published_at').eq('category', category).eq('is_published', true).order('published_at', { ascending: false });
   if (error) {
     if (notice) notice.innerHTML = '<p class="notice error">글을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>';
     render([]);
