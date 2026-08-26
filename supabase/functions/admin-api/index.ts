@@ -200,6 +200,30 @@ Deno.serve(async req => {
   if (action === "login") return login(req, origin, String(payload.pin || ""));
   if (!(await validSession(req.headers.get("x-admin-session") || ""))) return json(origin, { error: "관리자 로그인이 필요합니다." }, 401);
 
+  if (action === "upload-post-image") {
+    const mime = String(payload.file_type || "").toLowerCase();
+    const base64 = String(payload.file_base64 || "");
+    const reportedSize = Number(payload.file_size || 0);
+    const extensions: Record<string, string> = {
+      "image/jpeg": "jpg",
+      "image/png": "png",
+      "image/webp": "webp",
+      "image/gif": "gif",
+    };
+    if (!extensions[mime]) return json(origin, { error: "JPG, PNG, WEBP, GIF 사진만 올릴 수 있습니다." }, 400);
+    if (!Number.isFinite(reportedSize) || reportedSize <= 0 || reportedSize > 8 * 1024 * 1024) return json(origin, { error: "사진은 한 장당 8MB까지 올릴 수 있습니다." }, 400);
+    let bytes: Uint8Array;
+    try { bytes = Uint8Array.from(atob(base64), character => character.charCodeAt(0)); }
+    catch { return json(origin, { error: "사진 파일 형식이 올바르지 않습니다." }, 400); }
+    if (!bytes.length || bytes.length > 8 * 1024 * 1024 || Math.abs(bytes.length - reportedSize) > 3) return json(origin, { error: "사진 파일 크기를 확인해 주세요." }, 400);
+    const now = new Date();
+    const path = `${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, "0")}/${crypto.randomUUID()}.${extensions[mime]}`;
+    const { error } = await db.storage.from("post-images").upload(path, bytes, { contentType: mime, upsert: false, cacheControl: "31536000" });
+    if (error) return json(origin, { error: `사진을 저장하지 못했습니다: ${error.message}` }, 400);
+    const { data } = db.storage.from("post-images").getPublicUrl(path);
+    return json(origin, { ok: true, url: data.publicUrl });
+  }
+
   if (action === "list") {
     const { data, error } = await db.from("posts").select("*").order("updated_at", { ascending: false });
     return error ? json(origin, { error: error.message }, 400) : json(origin, { posts: data });

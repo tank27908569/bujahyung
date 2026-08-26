@@ -66,6 +66,52 @@ async function api(action, payload = {}) {
   return result;
 }
 
+function fileBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+    reader.onerror = () => reject(new Error('사진 파일을 읽지 못했습니다.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadPostImages(fileInput, targetInput, statusTarget) {
+  const files = [...fileInput.files];
+  if (!files.length) return;
+  if (files.length > 6) {
+    message(adminMessage, '사진은 한 번에 최대 6장까지 선택할 수 있습니다.', true);
+    fileInput.value = '';
+    return;
+  }
+  const uploaded = [];
+  fileInput.disabled = true;
+  try {
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index];
+      if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) throw new Error('JPG, PNG, WEBP, GIF 사진만 올릴 수 있습니다.');
+      if (file.size > 8 * 1024 * 1024) throw new Error(`${file.name} 사진이 8MB를 넘습니다.`);
+      statusTarget.textContent = `사진을 올리는 중입니다. (${index + 1}/${files.length})`;
+      const result = await api('upload-post-image', {
+        file_name: file.name,
+        file_type: file.type,
+        file_size: file.size,
+        file_base64: await fileBase64(file)
+      });
+      uploaded.push(result.url);
+    }
+    const existing = targetInput.value.trim();
+    targetInput.value = [existing, ...uploaded].filter(Boolean).join('|');
+    statusTarget.textContent = `사진 ${uploaded.length}장을 올렸습니다.`;
+    message(adminMessage, `사진 ${uploaded.length}장을 올렸습니다. 글을 저장하면 게시물에 적용됩니다.`);
+  } catch (error) {
+    statusTarget.textContent = '사진 업로드에 실패했습니다.';
+    message(adminMessage, error.message, true);
+  } finally {
+    fileInput.disabled = false;
+    fileInput.value = '';
+  }
+}
+
 function selectionStatus() {
   document.querySelector('#selection-count').textContent = selectedNumbers.size;
   document.querySelector('#publish-selected').disabled = selectedNumbers.size === 0;
@@ -261,6 +307,18 @@ document.querySelector('#create-form').addEventListener('submit', async event =>
     message(adminMessage, payload.is_published ? '새 글을 공개 게시했습니다.' : '새 글을 비공개로 저장했습니다.');
   } catch (error) { message(adminMessage, error.message, true); }
 });
+
+document.querySelector('#create-image-files').addEventListener('change', event => uploadPostImages(
+  event.target,
+  document.querySelector('#create-cover-image'),
+  document.querySelector('#create-upload-status')
+));
+
+document.querySelector('#edit-image-files').addEventListener('change', event => uploadPostImages(
+  event.target,
+  document.querySelector('#edit-cover-image'),
+  document.querySelector('#edit-upload-status')
+));
 
 sourceList.addEventListener('change', event => {
   if (!event.target.matches('input[type="checkbox"]')) return;
