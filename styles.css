@@ -20,18 +20,28 @@
 @media(max-width:900px){.principle p{font-size:15px}}
 
 /* Books: official covers and Kyobo purchase links */
-.book-art.books-display{display:flex;align-items:flex-end;justify-content:center;gap:24px;min-height:560px;padding:30px 0}
-.book-volume{width:min(47%,220px);position:relative;z-index:2}
+.book-layout{grid-template-columns:1.08fr .92fr;gap:7vw;max-width:1360px}
+.book-art.books-display{display:flex;align-items:flex-end;justify-content:center;gap:28px;min-height:630px;padding:30px 0}
+.book-volume{width:min(47%,270px);position:relative;z-index:2}
 .book-volume-second{transform:translateY(36px)}
 .book-image-link{display:block;background:#fff;box-shadow:18px 22px 35px rgba(36,30,21,.2);transition:transform .3s ease,box-shadow .3s ease}
-.book-image-link:hover{transform:translateY(-7px);box-shadow:22px 30px 42px rgba(36,30,21,.24)}
 .book-image-link img{display:block;width:100%;height:auto;aspect-ratio:458/682;object-fit:cover}
-.book-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:22px;padding-top:13px;border-top:1px solid var(--line)}
+
+/* Keep the full bicycle visible in the narrow desktop routine panel. */
+@media(min-width:901px){
+  .routine{grid-template-columns:1fr 1.05fr .72fr}
+  .routine-side{position:relative;background:#24241f}
+  .routine-side:before{content:"";position:absolute;inset:-28px;background:url('assets/routine-bike.jpg') center/cover no-repeat;filter:grayscale(1) blur(18px) brightness(.35);transform:scale(1.08)}
+  .routine-side img{position:relative;z-index:1;object-fit:contain;object-position:center}
+}
+
+@media(max-width:900px){
+  .routine-side:before{display:none}
+  .routine-side img{object-fit:cover;object-position:center 48%}
+}
+.book-meta{display:flex;align-items:center;gap:8px;margin-top:22px;padding-top:13px;border-top:1px solid var(--line)}
 .book-meta>span{font-size:10px;letter-spacing:.18em;color:var(--red);font-weight:700}
-.book-meta a{display:inline-flex;align-items:center;gap:10px;color:var(--ink);font-size:12px;font-weight:600;text-decoration:none}
-.book-meta a b{font-size:15px;color:var(--red);transition:transform .2s}
-.book-meta a:hover b{transform:translate(2px,-2px)}
-@media(max-width:900px){.book-art.books-display{min-height:auto;padding:10px 0 60px;gap:16px}.book-volume{width:min(46%,210px)}.book-volume-second{transform:translateY(28px)}.book-meta{align-items:flex-start;flex-direction:column;margin-top:16px}.book-meta a{font-size:11px}}
+@media(max-width:900px){.book-layout{grid-template-columns:1fr;gap:45px}.book-art.books-display{min-height:auto;padding:10px 0 60px;gap:16px}.book-volume{width:min(46%,225px)}.book-volume-second{transform:translateY(28px)}.book-meta{align-items:flex-start;flex-direction:column;margin-top:16px}}
 .content-card{text-decoration:none}
 .content-cards{grid-template-columns:repeat(6,1fr)}
 .content-card{grid-column:span 2}
