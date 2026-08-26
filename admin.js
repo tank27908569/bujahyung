@@ -117,7 +117,13 @@ function renderThreadsImports() {
 function filteredPosts() {
   const category = document.querySelector('#post-category-filter').value;
   const query = document.querySelector('#published-search').value.trim().toLocaleLowerCase('ko');
-  return posts.filter(post => (category === 'all' || post.category === category) && `${post.title}\n${post.body}`.toLocaleLowerCase('ko').includes(query));
+  const normalizedQuery = query.replace(/^#/, '').trim();
+  return posts.filter(post => {
+    if (category !== 'all' && post.category !== category) return false;
+    const textMatches = `${post.title}\n${post.body}`.toLocaleLowerCase('ko').includes(query);
+    const numberMatches = normalizedQuery !== '' && String(post.source_no ?? '') === normalizedQuery;
+    return textMatches || numberMatches;
+  });
 }
 
 function renderPosts() {
