@@ -67,6 +67,11 @@
       </section>
 
       <section id="view-threads" class="admin-view">
+        <div class="threads-connection-panel">
+          <div><p class="portal-eyebrow">META THREADS API</p><h2 class="view-title">Threads 계정 연결</h2><p id="threads-connection-status" class="view-description">연결 상태를 확인하고 있습니다.</p></div>
+          <div class="threads-secret-form"><label class="form-field"><span>Threads 앱 시크릿</span><input id="threads-app-secret" type="password" autocomplete="new-password" placeholder="Meta 앱 대시보드의 Threads 앱 시크릿"></label><button id="save-threads-secret" class="secondary-button" type="button">시크릿 안전하게 저장</button><button id="connect-threads-account" class="primary-button" type="button">Threads 계정 연결</button></div>
+          <p class="view-description">앱 시크릿은 관리자 서버에서 암호화되며 브라우저나 공개 페이지에 표시되지 않습니다. Meta 앱의 유효한 OAuth 리디렉션 URI에는 <code>https://oatpsijdaunrenqgnzqx.supabase.co/functions/v1/threads-oauth</code>를 등록하세요.</p>
+        </div>
         <div class="source-toolbar">
           <div><h2 class="view-title">Threads 원문＋이어 쓴 답글</h2><p class="view-description">내 원문과 내가 원문·내 답글에 이어 쓴 답글만 순서대로 가져옵니다. 다른 사람의 댓글과 그 댓글에 단 답변은 제외합니다.</p></div>
           <button id="sync-threads" class="primary-button" type="button">Threads에서 새로 가져오기</button>

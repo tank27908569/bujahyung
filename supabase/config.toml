@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.consultation-api]
 verify_jwt = false
+
+[functions.threads-oauth]
+verify_jwt = false

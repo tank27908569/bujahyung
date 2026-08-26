@@ -21,6 +21,7 @@ const categories = new Set([
 const inquiryStatuses = new Set(["new", "contacted", "completed", "archived"]);
 const threadsCategories = new Set(["auction-stories", "life-stories"]);
 const threadsApiBase = "https://graph.threads.net/v1.0";
+const threadsRedirectUri = `${Deno.env.get("SUPABASE_URL")}/functions/v1/threads-oauth`;
 
 function cors(origin: string | null) {
   const safeOrigin = origin && allowedOrigins.has(origin) ? origin : "https://bujahyung.vercel.app";
@@ -65,6 +66,32 @@ function decodeBase64Url(value: string) {
 async function hmac(value: string) {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(sessionSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return base64Url(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value))));
+}
+
+async function integrationKey() {
+  const material = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`threads:${sessionSecret}`));
+  return crypto.subtle.importKey("raw", material, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+
+async function encryptIntegrationSecret(value: string) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = new Uint8Array(await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    await integrationKey(),
+    new TextEncoder().encode(value),
+  ));
+  return `${base64Url(iv)}.${base64Url(encrypted)}`;
+}
+
+async function decryptIntegrationSecret(value: string) {
+  const [ivPart, encryptedPart] = value.split(".");
+  if (!ivPart || !encryptedPart) throw new Error("Threads 연결 정보가 손상되었습니다.");
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: decodeBase64Url(ivPart) },
+    await integrationKey(),
+    decodeBase64Url(encryptedPart),
+  );
+  return new TextDecoder().decode(decrypted);
 }
 
 async function createSession() {
@@ -177,6 +204,53 @@ Deno.serve(async req => {
     const { data, error } = await db.from("posts").select("*").order("updated_at", { ascending: false });
     return error ? json(origin, { error: error.message }, 400) : json(origin, { posts: data });
   }
+  if (action === "threads-integration-status") {
+    const { data, error } = await db.from("threads_integration")
+      .select("app_id, app_secret_encrypted, access_token_encrypted, token_expires_at, connected_username")
+      .eq("id", 1)
+      .maybeSingle();
+    if (error) return json(origin, { error: error.message }, 400);
+    return json(origin, {
+      app_id: data?.app_id || Deno.env.get("THREADS_APP_ID") || "",
+      secret_configured: Boolean(data?.app_secret_encrypted),
+      connected: Boolean(data?.access_token_encrypted),
+      token_expires_at: data?.token_expires_at || null,
+      connected_username: data?.connected_username || null,
+    });
+  }
+  if (action === "save-threads-app-secret") {
+    const appId = Deno.env.get("THREADS_APP_ID") || "";
+    const appSecret = String(payload.app_secret || "").trim();
+    if (!/^\d+$/.test(appId)) return json(origin, { error: "Threads 앱 ID가 서버에 설정되지 않았습니다." }, 503);
+    if (appSecret.length < 16 || appSecret.length > 300) return json(origin, { error: "Threads 앱 시크릿을 확인해 주세요." }, 400);
+    const { error } = await db.from("threads_integration").upsert({
+      id: 1,
+      app_id: appId,
+      app_secret_encrypted: await encryptIntegrationSecret(appSecret),
+    }, { onConflict: "id" });
+    return error ? json(origin, { error: error.message }, 400) : json(origin, { ok: true });
+  }
+  if (action === "threads-oauth-url") {
+    const { data, error } = await db.from("threads_integration")
+      .select("app_id, app_secret_encrypted")
+      .eq("id", 1)
+      .maybeSingle();
+    if (error) return json(origin, { error: error.message }, 400);
+    if (!data?.app_secret_encrypted) return json(origin, { error: "먼저 Threads 앱 시크릿을 저장해 주세요." }, 400);
+    const state = base64Url(crypto.getRandomValues(new Uint8Array(32)));
+    const { error: stateError } = await db.from("threads_integration").update({
+      oauth_state: state,
+      oauth_state_expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    }).eq("id", 1);
+    if (stateError) return json(origin, { error: stateError.message }, 400);
+    const url = new URL("https://threads.net/oauth/authorize");
+    url.searchParams.set("client_id", data.app_id);
+    url.searchParams.set("redirect_uri", threadsRedirectUri);
+    url.searchParams.set("scope", "threads_basic,threads_read_replies");
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("state", state);
+    return json(origin, { url: url.toString(), redirect_uri: threadsRedirectUri });
+  }
   if (action === "list-threads-imports") {
     const { data, error } = await db.from("threads_imports")
       .select("id, thread_id, permalink, root_text, replies, combined_body, thread_timestamp, status, published_post_id, synced_at")
@@ -184,7 +258,12 @@ Deno.serve(async req => {
     return error ? json(origin, { error: error.message }, 400) : json(origin, { imports: data });
   }
   if (action === "sync-threads") {
-    const token = Deno.env.get("THREADS_ACCESS_TOKEN") || "";
+    let token = Deno.env.get("THREADS_ACCESS_TOKEN") || "";
+    if (!token) {
+      const { data, error } = await db.from("threads_integration").select("access_token_encrypted").eq("id", 1).maybeSingle();
+      if (error) return json(origin, { error: error.message }, 400);
+      if (data?.access_token_encrypted) token = await decryptIntegrationSecret(data.access_token_encrypted);
+    }
     if (!token) return json(origin, { error: "Threads 계정 연결이 필요합니다. THREADS_ACCESS_TOKEN을 설정해 주세요." }, 503);
     try {
       const roots = (await threadsGet("/me/threads?fields=id,text,timestamp,permalink,is_reply&limit=100", token))

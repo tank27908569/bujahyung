@@ -32,6 +32,7 @@ let posts = [];
 let inquiries = [];
 let selectedNumbers = new Set();
 let selectedThreads = new Set();
+let threadsIntegration = null;
 
 function escapeHtml(value = '') {
   return String(value).replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
@@ -177,13 +178,29 @@ async function loadThreadsImports(preloaded) {
   threadsSelectionStatus();
 }
 
+async function loadThreadsIntegration() {
+  threadsIntegration = await api('threads-integration-status');
+  const status = document.querySelector('#threads-connection-status');
+  const connectButton = document.querySelector('#connect-threads-account');
+  if (threadsIntegration.connected) {
+    const expiry = threadsIntegration.token_expires_at ? ` · ${new Date(threadsIntegration.token_expires_at).toLocaleDateString('ko-KR')}까지` : '';
+    status.textContent = `${threadsIntegration.connected_username ? `@${threadsIntegration.connected_username}` : 'Threads 계정'} 연결 완료${expiry}`;
+    connectButton.textContent = 'Threads 계정 다시 연결';
+  } else if (threadsIntegration.secret_configured) {
+    status.textContent = `앱 ${threadsIntegration.app_id} 설정 완료 · Threads 계정 승인이 필요합니다.`;
+    connectButton.textContent = 'Threads 계정 연결';
+  } else {
+    status.textContent = `앱 ${threadsIntegration.app_id || ''}의 Threads 앱 시크릿을 한 번만 저장해 주세요.`;
+  }
+}
+
 async function loadInquiries(preloaded) {
   inquiries = preloaded || (await api('list-inquiries')).inquiries || [];
   renderInquiries();
 }
 
 async function showAdmin(preloaded) {
-  await Promise.all([loadSources(), loadPosts(preloaded), loadThreadsImports(), loadInquiries()]);
+  await Promise.all([loadSources(), loadPosts(preloaded), loadThreadsImports(), loadThreadsIntegration(), loadInquiries()]);
   loginPanel.style.display = 'none';
   adminApp.classList.add('active');
   document.querySelector('#logout-button').hidden = false;
@@ -285,6 +302,23 @@ document.querySelector('#sync-threads').addEventListener('click', async event =>
     message(adminMessage, `Threads 원고 ${result.count}편을 확인했습니다. 원문에 이어 쓴 내 답글도 함께 저장했습니다.`);
   } catch (error) { message(adminMessage, error.message, true); }
   finally { button.disabled = false; button.textContent = 'Threads에서 새로 가져오기'; }
+});
+document.querySelector('#save-threads-secret').addEventListener('click', async () => {
+  const input = document.querySelector('#threads-app-secret');
+  const appSecret = input.value.trim();
+  if (!appSecret) { message(adminMessage, 'Meta 앱 대시보드의 Threads 앱 시크릿을 입력해 주세요.', true); return; }
+  try {
+    await api('save-threads-app-secret', { app_secret: appSecret });
+    input.value = '';
+    await loadThreadsIntegration();
+    message(adminMessage, 'Threads 앱 시크릿을 암호화해 저장했습니다. 이제 계정 연결을 눌러 주세요.');
+  } catch (error) { message(adminMessage, error.message, true); }
+});
+document.querySelector('#connect-threads-account').addEventListener('click', async () => {
+  try {
+    const result = await api('threads-oauth-url');
+    location.href = result.url;
+  } catch (error) { message(adminMessage, error.message, true); }
 });
 document.querySelector('#publish-threads-selected').addEventListener('click', async () => {
   const selections = [...selectedThreads].map(id => {
