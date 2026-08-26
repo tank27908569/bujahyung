@@ -70,23 +70,31 @@ function renderReaderBody(value) {
 function renderReaderCover(post) {
   let cover = document.querySelector('#reader-cover');
   if (!cover) {
-    cover = document.createElement('figure');
+    cover = document.createElement('div');
     cover.id = 'reader-cover';
-    cover.className = 'reader-cover';
-    cover.innerHTML = '<img alt=""><figcaption></figcaption>';
     document.querySelector('#reader-body').before(cover);
   }
-  if (!post.cover_image_url) {
+  const imageUrls = String(post.cover_image_url || '').split('|').map(url => url.trim()).filter(Boolean);
+  cover.replaceChildren();
+  if (!imageUrls.length) {
     cover.hidden = true;
     return;
   }
   cover.hidden = false;
-  const image = cover.querySelector('img');
-  image.src = post.cover_image_url;
-  image.alt = `${post.title} 대표 그림`;
-  const caption = cover.querySelector('figcaption');
-  caption.textContent = post.cover_quote || '';
-  caption.hidden = !post.cover_quote;
+  imageUrls.forEach((url, index) => {
+    const figure = document.createElement('figure');
+    figure.className = 'reader-cover';
+    const image = document.createElement('img');
+    image.src = url;
+    image.alt = `${post.title} 사진 ${index + 1}`;
+    figure.appendChild(image);
+    if (index === 0 && post.cover_quote) {
+      const caption = document.createElement('figcaption');
+      caption.textContent = post.cover_quote;
+      figure.appendChild(caption);
+    }
+    cover.appendChild(figure);
+  });
 }
 
 function openPost(id) {
