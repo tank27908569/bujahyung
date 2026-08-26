@@ -18,6 +18,7 @@ const categoryPages = {
 const loginPanel = document.querySelector('#login-panel');
 const adminApp = document.querySelector('#admin-app');
 const sourceList = document.querySelector('#source-list');
+const threadsImportList = document.querySelector('#threads-import-list');
 const publishedList = document.querySelector('#published-list');
 const inquiryList = document.querySelector('#inquiry-list');
 const adminMessage = document.querySelector('#admin-message');
@@ -26,9 +27,11 @@ const editModal = document.querySelector('#edit-modal');
 const sessionKey = 'bujahyung_admin_session';
 let adminSession = sessionStorage.getItem(sessionKey) || '';
 let sourceEntries = [];
+let threadsImports = [];
 let posts = [];
 let inquiries = [];
 let selectedNumbers = new Set();
+let selectedThreads = new Set();
 
 function escapeHtml(value = '') {
   return String(value).replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
@@ -76,6 +79,37 @@ function renderSources(items = sourceEntries) {
   sourceList.innerHTML = items.map(item => {
     const exists = publishedNumbers.has(item.source_no);
     return `<div class="source-item"><input id="source-${item.source_no}" type="checkbox" value="${item.source_no}" ${selectedNumbers.has(item.source_no) ? 'checked' : ''} ${exists ? 'disabled' : ''}><label for="source-${item.source_no}"><span class="source-no">${exists ? '게시됨' : 'THREAD'} · ${String(item.source_no).padStart(3, '0')}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.body)}</p></label></div>`;
+  }).join('');
+}
+
+function threadsSelectionStatus() {
+  document.querySelector('#threads-selection-count').textContent = selectedThreads.size;
+  document.querySelector('#publish-threads-selected').disabled = selectedThreads.size === 0;
+}
+
+function filteredThreadsImports() {
+  const status = document.querySelector('#threads-status-filter').value;
+  const query = document.querySelector('#threads-search').value.trim().toLocaleLowerCase('ko');
+  return threadsImports.filter(item => (status === 'all' || item.status === status) && item.combined_body.toLocaleLowerCase('ko').includes(query));
+}
+
+function renderThreadsImports() {
+  const items = filteredThreadsImports();
+  if (!items.length) {
+    threadsImportList.innerHTML = '<div class="empty-state"><strong>조건에 맞는 Threads 원고가 없습니다.</strong><span>‘Threads에서 새로 가져오기’를 눌러 동기화해 주세요.</span></div>';
+    return;
+  }
+  threadsImportList.innerHTML = items.map(item => {
+    const published = item.status === 'published';
+    const replies = Array.isArray(item.replies) ? item.replies : [];
+    const replyMarkup = replies.length
+      ? `<div class="threads-replies"><small>이어 쓴 답글 ${replies.length}개</small>${replies.map((reply, index) => `<p><b>답글 ${index + 1}</b>${escapeHtml(reply.text)}</p>`).join('')}</div>`
+      : '<div class="threads-replies"><small>이어 쓴 답글 없음</small></div>';
+    return `<article class="source-item threads-import-item" data-id="${escapeHtml(item.id)}">
+      <input id="threads-${escapeHtml(item.id)}" type="checkbox" ${selectedThreads.has(item.id) ? 'checked' : ''} ${published ? 'disabled' : ''}>
+      <label for="threads-${escapeHtml(item.id)}"><span class="source-no">${published ? '게시 완료' : '게시 대기'} · ${new Date(item.thread_timestamp).toLocaleDateString('ko-KR')}</span><h3>${escapeHtml(item.root_text.split(/\r?\n/)[0])}</h3><p>${escapeHtml(item.root_text)}</p>${replyMarkup}</label>
+      <div class="threads-import-controls"><select aria-label="게시 분류" ${published ? 'disabled' : ''}><option value="life-stories">살아가는 이런저런 이야기</option><option value="auction-stories">경매실전 이야기</option></select>${item.permalink ? `<a class="secondary-button" href="${escapeHtml(item.permalink)}" target="_blank" rel="noopener">원문 보기 ↗</a>` : ''}</div>
+    </article>`;
   }).join('');
 }
 
@@ -136,13 +170,20 @@ async function loadPosts(preloaded) {
   renderSources();
 }
 
+async function loadThreadsImports(preloaded) {
+  threadsImports = preloaded || (await api('list-threads-imports')).imports || [];
+  selectedThreads = new Set([...selectedThreads].filter(id => threadsImports.some(item => item.id === id && item.status === 'pending')));
+  renderThreadsImports();
+  threadsSelectionStatus();
+}
+
 async function loadInquiries(preloaded) {
   inquiries = preloaded || (await api('list-inquiries')).inquiries || [];
   renderInquiries();
 }
 
 async function showAdmin(preloaded) {
-  await Promise.all([loadSources(), loadPosts(preloaded), loadInquiries()]);
+  await Promise.all([loadSources(), loadPosts(preloaded), loadThreadsImports(), loadInquiries()]);
   loginPanel.style.display = 'none';
   adminApp.classList.add('active');
   document.querySelector('#logout-button').hidden = false;
@@ -222,6 +263,40 @@ document.querySelector('#publish-selected').addEventListener('click', async () =
     selectionStatus();
     await loadPosts();
     message(adminMessage, `${selected.length}편을 스레드 서당에 공개 게시했습니다.`);
+  } catch (error) { message(adminMessage, error.message, true); }
+});
+
+threadsImportList.addEventListener('change', event => {
+  if (!event.target.matches('input[type="checkbox"]')) return;
+  const item = event.target.closest('.threads-import-item');
+  if (!item) return;
+  event.target.checked ? selectedThreads.add(item.dataset.id) : selectedThreads.delete(item.dataset.id);
+  threadsSelectionStatus();
+});
+document.querySelector('#threads-search').addEventListener('input', renderThreadsImports);
+document.querySelector('#threads-status-filter').addEventListener('change', renderThreadsImports);
+document.querySelector('#sync-threads').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  button.textContent = 'Threads 가져오는 중…';
+  try {
+    const result = await api('sync-threads');
+    await loadThreadsImports();
+    message(adminMessage, `Threads 원고 ${result.count}편을 확인했습니다. 원문에 이어 쓴 내 답글도 함께 저장했습니다.`);
+  } catch (error) { message(adminMessage, error.message, true); }
+  finally { button.disabled = false; button.textContent = 'Threads에서 새로 가져오기'; }
+});
+document.querySelector('#publish-threads-selected').addEventListener('click', async () => {
+  const selections = [...selectedThreads].map(id => {
+    const item = threadsImportList.querySelector(`.threads-import-item[data-id="${CSS.escape(id)}"]`);
+    return { id, category: item?.querySelector('select')?.value || 'life-stories' };
+  });
+  if (!selections.length) return;
+  try {
+    const result = await api('publish-threads-imports', { selections });
+    selectedThreads.clear();
+    await Promise.all([loadThreadsImports(), loadPosts()]);
+    message(adminMessage, `${result.count}편을 선택한 분류에 공개 게시했습니다.`);
   } catch (error) { message(adminMessage, error.message, true); }
 });
 

@@ -19,6 +19,8 @@ const categories = new Set([
   "life-stories",
 ]);
 const inquiryStatuses = new Set(["new", "contacted", "completed", "archived"]);
+const threadsCategories = new Set(["auction-stories", "life-stories"]);
+const threadsApiBase = "https://graph.threads.net/v1.0";
 
 function cors(origin: string | null) {
   const safeOrigin = origin && allowedOrigins.has(origin) ? origin : "https://bujahyung.vercel.app";
@@ -79,6 +81,57 @@ async function validSession(token: string) {
   } catch { return false; }
 }
 
+type ThreadsItem = {
+  id: string;
+  text?: string;
+  timestamp?: string;
+  permalink?: string;
+  is_reply?: boolean;
+  is_reply_owned_by_me?: boolean;
+  replied_to?: { id?: string };
+};
+
+async function threadsGet(path: string, token: string) {
+  const first = new URL(path.startsWith("http") ? path : `${threadsApiBase}${path}`);
+  first.searchParams.set("access_token", token);
+  const items: ThreadsItem[] = [];
+  let next: string | null = first.toString();
+  for (let page = 0; next && page < 50; page += 1) {
+    const response = await fetch(next);
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result?.error?.message || `Threads API HTTP ${response.status}`);
+    if (Array.isArray(result.data)) items.push(...result.data);
+    next = typeof result?.paging?.next === "string" ? result.paging.next : null;
+  }
+  return items;
+}
+
+function continuationReplies(rootId: string, conversation: ThreadsItem[]) {
+  const ordered = conversation
+    .filter(item => item.id && item.text && item.is_reply_owned_by_me)
+    .sort((left, right) => Date.parse(left.timestamp || "") - Date.parse(right.timestamp || ""));
+  const accepted = new Set([rootId]);
+  const result: ThreadsItem[] = [];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const item of ordered) {
+      if (accepted.has(item.id)) continue;
+      const parentId = item.replied_to?.id || rootId;
+      if (!accepted.has(parentId)) continue;
+      accepted.add(item.id);
+      result.push(item);
+      changed = true;
+    }
+  }
+  return result.sort((left, right) => Date.parse(left.timestamp || "") - Date.parse(right.timestamp || ""));
+}
+
+function threadsTitle(text: string) {
+  const first = text.split(/\r?\n/).map(line => line.trim()).find(Boolean) || "Threads 이야기";
+  return first.length <= 60 ? first : `${first.slice(0, 57).trim()}…`;
+}
+
 async function login(req: Request, origin: string | null, pin: string) {
   const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("cf-connecting-ip") || "unknown";
   const identifier = await sha256(forwarded);
@@ -123,6 +176,100 @@ Deno.serve(async req => {
   if (action === "list") {
     const { data, error } = await db.from("posts").select("*").order("updated_at", { ascending: false });
     return error ? json(origin, { error: error.message }, 400) : json(origin, { posts: data });
+  }
+  if (action === "list-threads-imports") {
+    const { data, error } = await db.from("threads_imports")
+      .select("id, thread_id, permalink, root_text, replies, combined_body, thread_timestamp, status, published_post_id, synced_at")
+      .order("thread_timestamp", { ascending: false });
+    return error ? json(origin, { error: error.message }, 400) : json(origin, { imports: data });
+  }
+  if (action === "sync-threads") {
+    const token = Deno.env.get("THREADS_ACCESS_TOKEN") || "";
+    if (!token) return json(origin, { error: "Threads 계정 연결이 필요합니다. THREADS_ACCESS_TOKEN을 설정해 주세요." }, 503);
+    try {
+      const roots = (await threadsGet("/me/threads?fields=id,text,timestamp,permalink,is_reply&limit=100", token))
+        .filter(item => item.id && item.text && !item.is_reply);
+      const { data: previous, error: previousError } = await db.from("threads_imports")
+        .select("thread_id, status, published_post_id");
+      if (previousError) return json(origin, { error: previousError.message }, 400);
+      const previousById = new Map((previous || []).map(item => [item.thread_id, item]));
+      const rows = [];
+      for (const root of roots) {
+        const conversation = await threadsGet(
+          `/${encodeURIComponent(root.id)}/conversation?fields=id,text,timestamp,permalink,is_reply,is_reply_owned_by_me,replied_to,root_post&reverse=false&limit=100`,
+          token,
+        );
+        const replies = continuationReplies(root.id, conversation).map(reply => ({
+          id: reply.id,
+          text: String(reply.text || "").trim(),
+          timestamp: reply.timestamp || null,
+          permalink: reply.permalink || null,
+          parent_id: reply.replied_to?.id || root.id,
+        }));
+        const rootText = String(root.text || "").trim();
+        const combinedBody = [rootText, ...replies.map(reply => reply.text)].filter(Boolean).join("\n\n").slice(0, 30000);
+        const existing = previousById.get(root.id);
+        rows.push({
+          thread_id: root.id,
+          permalink: root.permalink || null,
+          root_text: rootText,
+          replies,
+          combined_body: combinedBody,
+          thread_timestamp: Number.isNaN(Date.parse(root.timestamp || "")) ? new Date().toISOString() : new Date(root.timestamp!).toISOString(),
+          status: existing?.status || "pending",
+          published_post_id: existing?.published_post_id || null,
+          synced_at: new Date().toISOString(),
+        });
+      }
+      if (rows.length) {
+        const { error } = await db.from("threads_imports").upsert(rows, { onConflict: "thread_id" });
+        if (error) return json(origin, { error: error.message }, 400);
+      }
+      return json(origin, { ok: true, count: rows.length });
+    } catch (error) {
+      return json(origin, { error: error instanceof Error ? error.message : "Threads 동기화에 실패했습니다." }, 502);
+    }
+  }
+  if (action === "publish-threads-imports") {
+    const selections = Array.isArray(payload.selections) ? payload.selections.slice(0, 50) : [];
+    const clean = selections.map((item: Record<string, unknown>) => ({
+      id: String(item.id || ""),
+      category: String(item.category || ""),
+    })).filter(item => item.id && threadsCategories.has(item.category));
+    if (!clean.length || clean.length !== selections.length) return json(origin, { error: "게시할 글과 분류를 확인해 주세요." }, 400);
+    const { data: imports, error: importsError } = await db.from("threads_imports")
+      .select("*")
+      .in("id", clean.map(item => item.id))
+      .eq("status", "pending");
+    if (importsError) return json(origin, { error: importsError.message }, 400);
+    if (!imports?.length) return json(origin, { error: "게시 가능한 Threads 원고가 없습니다." }, 400);
+    const categoryById = new Map(clean.map(item => [item.id, item.category]));
+    const nextNumbers = new Map<string, number>();
+    for (const category of threadsCategories) {
+      const { data, error } = await db.from("posts").select("source_no").eq("category", category).order("source_no", { ascending: false }).limit(1);
+      if (error) return json(origin, { error: error.message }, 400);
+      nextNumbers.set(category, Number(data?.[0]?.source_no || 0));
+    }
+    let published = 0;
+    for (const item of imports.sort((left, right) => Date.parse(left.thread_timestamp) - Date.parse(right.thread_timestamp))) {
+      const category = categoryById.get(item.id)!;
+      const sourceNo = (nextNumbers.get(category) || 0) + 1;
+      nextNumbers.set(category, sourceNo);
+      const { data: post, error } = await db.from("posts").insert({
+        external_id: `threads-${item.thread_id}`,
+        category,
+        source_no: sourceNo,
+        title: threadsTitle(item.root_text),
+        body: item.combined_body,
+        is_published: true,
+        published_at: item.thread_timestamp,
+      }).select("id").single();
+      if (error) return json(origin, { error: error.message, published }, 400);
+      const { error: updateError } = await db.from("threads_imports").update({ status: "published", published_post_id: post.id }).eq("id", item.id);
+      if (updateError) return json(origin, { error: updateError.message, published }, 400);
+      published += 1;
+    }
+    return json(origin, { ok: true, count: published });
   }
   if (action === "list-inquiries") {
     const { data, error } = await db.from("consultation_inquiries")
