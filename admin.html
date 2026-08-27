@@ -40,7 +40,6 @@
       <div class="admin-tabs" role="tablist">
         <button class="admin-tab active" type="button" data-view="create">새 글 작성</button>
         <button class="admin-tab" type="button" data-view="threads">Threads 가져오기</button>
-        <button class="admin-tab" type="button" data-view="sources">서당 원고 선택</button>
         <button class="admin-tab" type="button" data-view="published">전체 글 관리</button>
         <button class="admin-tab" type="button" data-view="inquiries">상담 신청 관리 <span id="new-inquiry-count" class="tab-count" hidden></span></button>
       </div>
@@ -57,15 +56,6 @@
           <label class="check-field"><input id="create-published" type="checkbox" checked><span>작성과 동시에 공개</span></label>
           <div class="button-row"><button class="primary-button" type="submit">새 글 저장</button><button id="create-reset" class="secondary-button" type="reset">입력 지우기</button></div>
         </form>
-      </section>
-
-      <section id="view-sources" class="admin-view">
-        <div class="source-toolbar">
-          <label class="search-box"><span class="sr-only">원고 검색</span><input id="source-search" type="search" placeholder="번호·성어·문장 검색"></label>
-          <button id="clear-selection" class="secondary-button" type="button">선택 해제</button>
-        </div>
-        <div id="source-list" class="source-list"><div class="loading">HWPX 원고를 불러오고 있습니다.</div></div>
-        <div class="selection-bar"><p><strong id="selection-count">0</strong>편 선택됨</p><button id="publish-selected" class="primary-button" type="button" disabled>선택한 글 게시</button></div>
       </section>
 
       <section id="view-threads" class="admin-view">

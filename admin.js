@@ -17,7 +17,6 @@ const categoryPages = {
 };
 const loginPanel = document.querySelector('#login-panel');
 const adminApp = document.querySelector('#admin-app');
-const sourceList = document.querySelector('#source-list');
 const threadsImportList = document.querySelector('#threads-import-list');
 const publishedList = document.querySelector('#published-list');
 const inquiryList = document.querySelector('#inquiry-list');
@@ -26,11 +25,9 @@ const loginMessage = document.querySelector('#login-message');
 const editModal = document.querySelector('#edit-modal');
 const sessionKey = 'bujahyung_admin_session';
 let adminSession = sessionStorage.getItem(sessionKey) || '';
-let sourceEntries = [];
 let threadsImports = [];
 let posts = [];
 let inquiries = [];
-let selectedNumbers = new Set();
 let selectedThreads = new Set();
 let threadsIntegration = null;
 
@@ -140,23 +137,6 @@ async function uploadInlineImages(fileInput, textarea, positionSelect, statusTar
   textarea.focus();
 }
 
-function selectionStatus() {
-  document.querySelector('#selection-count').textContent = selectedNumbers.size;
-  document.querySelector('#publish-selected').disabled = selectedNumbers.size === 0;
-}
-
-function renderSources(items = sourceEntries) {
-  const publishedNumbers = new Set(posts.filter(post => post.category === 'thread-seodang').map(post => post.source_no));
-  if (!items.length) {
-    sourceList.innerHTML = '<div class="empty-state"><strong>검색 결과가 없습니다.</strong></div>';
-    return;
-  }
-  sourceList.innerHTML = items.map(item => {
-    const exists = publishedNumbers.has(item.source_no);
-    return `<div class="source-item"><input id="source-${item.source_no}" type="checkbox" value="${item.source_no}" ${selectedNumbers.has(item.source_no) ? 'checked' : ''} ${exists ? 'disabled' : ''}><label for="source-${item.source_no}"><span class="source-no">${exists ? '게시됨' : 'THREAD'} · ${String(item.source_no).padStart(3, '0')}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.body)}</p></label></div>`;
-  }).join('');
-}
-
 function threadsSelectionStatus() {
   document.querySelector('#threads-selection-count').textContent = selectedThreads.size;
   document.querySelector('#publish-threads-selected').disabled = selectedThreads.size === 0;
@@ -238,17 +218,9 @@ function renderInquiries() {
   </article>`).join('');
 }
 
-async function loadSources() {
-  const response = await fetch('data/thread-seodang.json');
-  if (!response.ok) throw new Error('스레드 원고 목록을 읽지 못했습니다.');
-  sourceEntries = await response.json();
-  renderSources();
-}
-
 async function loadPosts(preloaded) {
   posts = preloaded || (await api('list')).posts || [];
   renderPosts();
-  renderSources();
 }
 
 async function loadThreadsImports(preloaded) {
@@ -280,7 +252,7 @@ async function loadInquiries(preloaded) {
 }
 
 async function showAdmin(preloaded) {
-  await Promise.all([loadSources(), loadPosts(preloaded), loadThreadsImports(), loadThreadsIntegration(), loadInquiries()]);
+  await Promise.all([loadPosts(preloaded), loadThreadsImports(), loadThreadsIntegration(), loadInquiries()]);
   loginPanel.style.display = 'none';
   adminApp.classList.add('active');
   document.querySelector('#logout-button').hidden = false;
@@ -361,33 +333,6 @@ document.querySelector('#edit-inline-image-files').addEventListener('change', ev
   document.querySelector('#edit-inline-position'),
   document.querySelector('#edit-inline-upload-status')
 ));
-
-sourceList.addEventListener('change', event => {
-  if (!event.target.matches('input[type="checkbox"]')) return;
-  const number = Number(event.target.value);
-  event.target.checked ? selectedNumbers.add(number) : selectedNumbers.delete(number);
-  selectionStatus();
-});
-document.querySelector('#source-search').addEventListener('input', event => {
-  const query = event.target.value.trim().toLocaleLowerCase('ko');
-  renderSources(sourceEntries.filter(item => `${item.source_no} ${item.title} ${item.body}`.toLocaleLowerCase('ko').includes(query)));
-});
-document.querySelector('#clear-selection').addEventListener('click', () => {
-  selectedNumbers.clear();
-  renderSources();
-  selectionStatus();
-});
-document.querySelector('#publish-selected').addEventListener('click', async () => {
-  const selected = sourceEntries.filter(item => selectedNumbers.has(item.source_no));
-  if (!selected.length) return;
-  try {
-    await api('publish', { posts: selected });
-    selectedNumbers.clear();
-    selectionStatus();
-    await loadPosts();
-    message(adminMessage, `${selected.length}편을 스레드 서당에 공개 게시했습니다.`);
-  } catch (error) { message(adminMessage, error.message, true); }
-});
 
 threadsImportList.addEventListener('change', event => {
   if (!event.target.matches('input[type="checkbox"]')) return;
