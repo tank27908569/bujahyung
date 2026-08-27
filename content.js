@@ -60,11 +60,26 @@ function readableParagraphs(value = '') {
 function renderReaderBody(value) {
   const readerBody = document.querySelector('#reader-body');
   readerBody.replaceChildren();
-  readableParagraphs(value).forEach(paragraph => {
+  const imagePattern = /^\[\[사진:(https?:\/\/[^\]]+)\]\]$/gm;
+  let offset = 0;
+  const appendText = text => readableParagraphs(text).forEach(paragraph => {
     const node = document.createElement('p');
     node.textContent = paragraph;
     readerBody.appendChild(node);
   });
+  for (const match of String(value).matchAll(imagePattern)) {
+    appendText(String(value).slice(offset, match.index));
+    const figure = document.createElement('figure');
+    figure.className = 'reader-inline-image';
+    const image = document.createElement('img');
+    image.src = match[1];
+    image.alt = '글 내용 사진';
+    image.loading = 'lazy';
+    figure.appendChild(image);
+    readerBody.appendChild(figure);
+    offset = match.index + match[0].length;
+  }
+  appendText(String(value).slice(offset));
 }
 
 function renderReaderCover(post) {

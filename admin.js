@@ -75,13 +75,13 @@ function fileBase64(file) {
   });
 }
 
-async function uploadPostImages(fileInput, targetInput, statusTarget) {
+async function uploadSelectedImages(fileInput, statusTarget) {
   const files = [...fileInput.files];
-  if (!files.length) return;
+  if (!files.length) return [];
   if (files.length > 6) {
     message(adminMessage, '사진은 한 번에 최대 6장까지 선택할 수 있습니다.', true);
     fileInput.value = '';
-    return;
+    return [];
   }
   const uploaded = [];
   fileInput.disabled = true;
@@ -99,17 +99,45 @@ async function uploadPostImages(fileInput, targetInput, statusTarget) {
       });
       uploaded.push(result.url);
     }
-    const existing = targetInput.value.trim();
-    targetInput.value = [existing, ...uploaded].filter(Boolean).join('|');
     statusTarget.textContent = `사진 ${uploaded.length}장을 올렸습니다.`;
-    message(adminMessage, `사진 ${uploaded.length}장을 올렸습니다. 글을 저장하면 게시물에 적용됩니다.`);
+    return uploaded;
   } catch (error) {
     statusTarget.textContent = '사진 업로드에 실패했습니다.';
     message(adminMessage, error.message, true);
+    return [];
   } finally {
     fileInput.disabled = false;
     fileInput.value = '';
   }
+}
+
+async function uploadPostImages(fileInput, targetInput, statusTarget) {
+  const uploaded = await uploadSelectedImages(fileInput, statusTarget);
+  if (!uploaded.length) return;
+  const existing = targetInput.value.trim();
+  targetInput.value = [existing, ...uploaded].filter(Boolean).join('|');
+  message(adminMessage, `대표 사진 ${uploaded.length}장을 올렸습니다. 글을 저장하면 적용됩니다.`);
+}
+
+async function uploadInlineImages(fileInput, textarea, positionSelect, statusTarget) {
+  const cursorPosition = textarea.selectionStart;
+  const uploaded = await uploadSelectedImages(fileInput, statusTarget);
+  if (!uploaded.length) return;
+  const markers = uploaded.map(url => `[[사진:${url}]]`).join('\n\n');
+  const position = positionSelect.value;
+  const body = textarea.value;
+  if (position === 'start') {
+    textarea.value = `${markers}\n\n${body}`.trim();
+  } else if (position === 'end') {
+    textarea.value = `${body}\n\n${markers}`.trim();
+  } else {
+    const before = body.slice(0, cursorPosition).replace(/\s*$/, '');
+    const after = body.slice(cursorPosition).replace(/^\s*/, '');
+    textarea.value = `${before}${before ? '\n\n' : ''}${markers}${after ? `\n\n${after}` : ''}`;
+  }
+  statusTarget.textContent = `본문에 사진 ${uploaded.length}장을 넣었습니다.`;
+  message(adminMessage, `본문에 사진 ${uploaded.length}장을 넣었습니다. 글을 저장하면 적용됩니다.`);
+  textarea.focus();
 }
 
 function selectionStatus() {
@@ -318,6 +346,20 @@ document.querySelector('#edit-image-files').addEventListener('change', event => 
   event.target,
   document.querySelector('#edit-cover-image'),
   document.querySelector('#edit-upload-status')
+));
+
+document.querySelector('#create-inline-image-files').addEventListener('change', event => uploadInlineImages(
+  event.target,
+  document.querySelector('#create-body'),
+  document.querySelector('#create-inline-position'),
+  document.querySelector('#create-inline-upload-status')
+));
+
+document.querySelector('#edit-inline-image-files').addEventListener('change', event => uploadInlineImages(
+  event.target,
+  document.querySelector('#edit-body'),
+  document.querySelector('#edit-inline-position'),
+  document.querySelector('#edit-inline-upload-status')
 ));
 
 sourceList.addEventListener('change', event => {
