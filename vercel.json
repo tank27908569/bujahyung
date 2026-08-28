@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/hub", "destination": "/hub.html" }
+  ]
+}
