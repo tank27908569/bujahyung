@@ -118,19 +118,48 @@ type ThreadsItem = {
   replied_to?: { id?: string };
 };
 
-async function threadsGet(path: string, token: string) {
+// 한 번의 호출에서 가져올 양을 제한합니다. 원문 목록은 커서로 나눠 받고,
+// 대화(이어 쓴 답글)는 작은 묶음으로 병렬 수집해 Edge Function 제한시간을 넘기지 않습니다.
+const threadsRequestTimeoutMs = 10000;
+const threadsRootPagesPerCall = 3;
+const threadsConversationPages = 5;
+const threadsRepliesPerCall = 8;
+
+async function threadsFetch(url: string) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(threadsRequestTimeoutMs) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result?.error?.message || `Threads API HTTP ${response.status}`);
+  return result;
+}
+
+// maxPages까지만 따라가고 남은 커서를 next로 돌려줍니다.
+async function threadsPage(path: string, token: string, maxPages: number) {
   const first = new URL(path.startsWith("http") ? path : `${threadsApiBase}${path}`);
-  first.searchParams.set("access_token", token);
+  if (!first.searchParams.get("access_token")) first.searchParams.set("access_token", token);
   const items: ThreadsItem[] = [];
   let next: string | null = first.toString();
-  for (let page = 0; next && page < 50; page += 1) {
-    const response = await fetch(next);
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result?.error?.message || `Threads API HTTP ${response.status}`);
+  for (let page = 0; next && page < maxPages; page += 1) {
+    const result = await threadsFetch(next);
     if (Array.isArray(result.data)) items.push(...result.data);
     next = typeof result?.paging?.next === "string" ? result.paging.next : null;
   }
-  return items;
+  return { items, next };
+}
+
+async function threadsToken() {
+  const fromEnv = Deno.env.get("THREADS_ACCESS_TOKEN") || "";
+  if (fromEnv) return fromEnv;
+  const { data } = await db.from("threads_integration").select("access_token_encrypted").eq("id", 1).maybeSingle();
+  if (!data?.access_token_encrypted) return "";
+  return await decryptIntegrationSecret(data.access_token_encrypted);
+}
+
+function threadsTimestamp(value?: string) {
+  return Number.isNaN(Date.parse(value || "")) ? new Date().toISOString() : new Date(value!).toISOString();
+}
+
+function threadsCombinedBody(rootText: string, replies: { text?: string }[]) {
+  return [rootText, ...replies.map(reply => String(reply?.text || ""))].filter(Boolean).join("\n\n").slice(0, 30000);
 }
 
 function continuationReplies(rootId: string, conversation: ThreadsItem[]) {
@@ -285,57 +314,114 @@ Deno.serve(async req => {
       .order("thread_timestamp", { ascending: false });
     return error ? json(origin, { error: error.message }, 400) : json(origin, { imports: data });
   }
-  if (action === "sync-threads") {
-    let token = Deno.env.get("THREADS_ACCESS_TOKEN") || "";
-    if (!token) {
-      const { data, error } = await db.from("threads_integration").select("access_token_encrypted").eq("id", 1).maybeSingle();
-      if (error) return json(origin, { error: error.message }, 400);
-      if (data?.access_token_encrypted) token = await decryptIntegrationSecret(data.access_token_encrypted);
-    }
+  // 1단계: 원문 목록만 빠르게 저장합니다. 남은 커서(next)를 돌려주면 브라우저가 이어서 부릅니다.
+  if (action === "sync-threads-roots") {
+    const token = await threadsToken();
     if (!token) return json(origin, { error: "Threads 계정 연결이 필요합니다. THREADS_ACCESS_TOKEN을 설정해 주세요." }, 503);
     try {
-      const roots = (await threadsGet("/me/threads?fields=id,text,timestamp,permalink,is_reply&limit=100", token))
-        .filter(item => item.id && item.text && !item.is_reply);
+      const after = typeof payload.after === "string" && payload.after ? payload.after : "";
+      const { items, next } = await threadsPage(
+        after || "/me/threads?fields=id,text,timestamp,permalink,is_reply&limit=100",
+        token,
+        threadsRootPagesPerCall,
+      );
+      const roots = items
+        .filter(item => item.id && item.text && !item.is_reply)
+        .map(item => ({ ...item, rootText: String(item.text || "").trim() }))
+        .filter(item => item.rootText);
+      if (!roots.length) return json(origin, { ok: true, count: 0, pending: [], next, fetched: items.length });
+
       const { data: previous, error: previousError } = await db.from("threads_imports")
-        .select("thread_id, status, published_post_id");
+        .select("thread_id, status, published_post_id, replies, combined_body")
+        .in("thread_id", roots.map(root => root.id));
       if (previousError) return json(origin, { error: previousError.message }, 400);
       const previousById = new Map((previous || []).map(item => [item.thread_id, item]));
-      const rows = [];
-      for (const root of roots) {
-        const conversation = await threadsGet(
-          `/${encodeURIComponent(root.id)}/conversation?fields=id,text,timestamp,permalink,is_reply,is_reply_owned_by_me,replied_to,root_post&reverse=false&limit=100`,
-          token,
-        );
-        const replies = continuationReplies(root.id, conversation).map(reply => ({
-          id: reply.id,
-          text: String(reply.text || "").trim(),
-          timestamp: reply.timestamp || null,
-          permalink: reply.permalink || null,
-          parent_id: reply.replied_to?.id || root.id,
-        }));
-        const rootText = String(root.text || "").trim();
-        const combinedBody = [rootText, ...replies.map(reply => reply.text)].filter(Boolean).join("\n\n").slice(0, 30000);
+
+      // 답글을 아직 한 번도 못 가져온 원문만 2단계 대상으로 넘깁니다.
+      const pending: string[] = [];
+      const rows = roots.map(root => {
         const existing = previousById.get(root.id);
-        rows.push({
+        const replies = Array.isArray(existing?.replies) ? existing!.replies : [];
+        if (!replies.length) pending.push(root.id);
+        return {
           thread_id: root.id,
           permalink: root.permalink || null,
-          root_text: rootText,
+          root_text: root.rootText,
           replies,
-          combined_body: combinedBody,
-          thread_timestamp: Number.isNaN(Date.parse(root.timestamp || "")) ? new Date().toISOString() : new Date(root.timestamp!).toISOString(),
+          combined_body: existing?.combined_body || root.rootText,
+          thread_timestamp: threadsTimestamp(root.timestamp),
           status: existing?.status || "pending",
           published_post_id: existing?.published_post_id || null,
           synced_at: new Date().toISOString(),
-        });
-      }
-      if (rows.length) {
-        const { error } = await db.from("threads_imports").upsert(rows, { onConflict: "thread_id" });
-        if (error) return json(origin, { error: error.message }, 400);
-      }
-      return json(origin, { ok: true, count: rows.length });
+        };
+      });
+      const { error } = await db.from("threads_imports").upsert(rows, { onConflict: "thread_id" });
+      if (error) return json(origin, { error: error.message }, 400);
+      return json(origin, { ok: true, count: rows.length, pending, next, fetched: items.length });
     } catch (error) {
-      return json(origin, { error: error instanceof Error ? error.message : "Threads 동기화에 실패했습니다." }, 502);
+      return json(origin, { error: error instanceof Error ? error.message : "Threads 원문 목록을 가져오지 못했습니다." }, 502);
     }
+  }
+
+  // 2단계: 넘겨받은 원문 묶음의 이어 쓴 답글만 병렬로 채웁니다. 한 건이 실패해도 나머지는 저장합니다.
+  if (action === "sync-threads-replies") {
+    const token = await threadsToken();
+    if (!token) return json(origin, { error: "Threads 계정 연결이 필요합니다. THREADS_ACCESS_TOKEN을 설정해 주세요." }, 503);
+    const ids = (Array.isArray(payload.ids) ? payload.ids : [])
+      .map((id: unknown) => String(id || "").trim())
+      .filter(Boolean)
+      .slice(0, threadsRepliesPerCall);
+    if (!ids.length) return json(origin, { ok: true, updated: 0, failed: [] });
+
+    const { data: current, error: currentError } = await db.from("threads_imports")
+      .select("thread_id, permalink, root_text, thread_timestamp, status, published_post_id")
+      .in("thread_id", ids);
+    if (currentError) return json(origin, { error: currentError.message }, 400);
+    const currentById = new Map((current || []).map(item => [item.thread_id, item]));
+
+    const results = await Promise.all(ids.map(async (id: string) => {
+      try {
+        const { items } = await threadsPage(
+          `/${encodeURIComponent(id)}/conversation?fields=id,text,timestamp,permalink,is_reply,is_reply_owned_by_me,replied_to,root_post&reverse=false&limit=100`,
+          token,
+          threadsConversationPages,
+        );
+        return { id, conversation: items };
+      } catch (error) {
+        return { id, error: error instanceof Error ? error.message : "대화를 가져오지 못했습니다." };
+      }
+    }));
+
+    const rows = [];
+    const failed: { id: string; error: string }[] = [];
+    for (const result of results) {
+      const base = currentById.get(result.id);
+      if (!base) { failed.push({ id: result.id, error: "저장된 원문을 찾지 못했습니다." }); continue; }
+      if (!result.conversation) { failed.push({ id: result.id, error: result.error! }); continue; }
+      const replies = continuationReplies(result.id, result.conversation).map(reply => ({
+        id: reply.id,
+        text: String(reply.text || "").trim(),
+        timestamp: reply.timestamp || null,
+        permalink: reply.permalink || null,
+        parent_id: reply.replied_to?.id || result.id,
+      }));
+      rows.push({
+        thread_id: result.id,
+        permalink: base.permalink,
+        root_text: base.root_text,
+        replies,
+        combined_body: threadsCombinedBody(base.root_text, replies),
+        thread_timestamp: base.thread_timestamp,
+        status: base.status,
+        published_post_id: base.published_post_id,
+        synced_at: new Date().toISOString(),
+      });
+    }
+    if (rows.length) {
+      const { error } = await db.from("threads_imports").upsert(rows, { onConflict: "thread_id" });
+      if (error) return json(origin, { error: error.message }, 400);
+    }
+    return json(origin, { ok: true, updated: rows.length, failed });
   }
   if (action === "publish-threads-imports") {
     const selections = Array.isArray(payload.selections) ? payload.selections.slice(0, 50) : [];

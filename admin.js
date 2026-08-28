@@ -48,12 +48,19 @@ document.querySelector('#create-category').innerHTML = categoryOptions();
 document.querySelector('#edit-category').innerHTML = categoryOptions();
 document.querySelector('#post-category-filter').innerHTML = categoryOptions(true);
 
-async function api(action, payload = {}) {
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-admin-session': adminSession },
-    body: JSON.stringify({ action, ...payload })
-  });
+async function api(action, payload = {}, timeoutMs = 0) {
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-session': adminSession },
+      body: JSON.stringify({ action, ...payload }),
+      signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined
+    });
+  } catch (error) {
+    if (error.name === 'TimeoutError') throw new Error(`서버 응답이 ${Math.round(timeoutMs / 1000)}초를 넘겨 중단했습니다.`);
+    throw new Error('서버에 연결하지 못했습니다.');
+  }
   const result = await response.json().catch(() => ({}));
   if (response.status === 401) {
     adminSession = '';
@@ -416,14 +423,60 @@ document.querySelector('#threads-search').addEventListener('input', renderThread
 document.querySelector('#threads-status-filter').addEventListener('change', renderThreadsImports);
 document.querySelector('#sync-threads').addEventListener('click', async event => {
   const button = event.currentTarget;
+  const syncStatus = document.querySelector('#threads-sync-status');
+  const startedAt = Date.now();
+  const elapsed = () => `${Math.round((Date.now() - startedAt) / 1000)}초`;
+  const step = (text, isError = false) => message(syncStatus, text, isError);
+  const callTimeoutMs = 60000;
+
   button.disabled = true;
   button.textContent = 'Threads 가져오는 중…';
+  step('원문 목록을 가져오고 있습니다…');
   try {
-    const result = await api('sync-threads');
+    // 1단계: 원문만 먼저 저장하고 화면에 띄웁니다. 여기서 끊겨도 저장된 만큼은 남습니다.
+    let after = '';
+    let roots = 0;
+    const pending = [];
+    do {
+      const result = await api('sync-threads-roots', after ? { after } : {}, callTimeoutMs);
+      roots += result.count;
+      pending.push(...(result.pending || []));
+      after = result.next || '';
+      step(`원문 ${roots}편 저장 · ${elapsed()} 경과`);
+    } while (after);
+
     await loadThreadsImports();
-    message(adminMessage, `Threads 원고 ${result.count}편을 확인했습니다. 원문에 이어 쓴 내 답글도 함께 저장했습니다.`);
-  } catch (error) { message(adminMessage, error.message, true); }
-  finally { button.disabled = false; button.textContent = 'Threads에서 새로 가져오기'; }
+
+    // 2단계: 이어 쓴 답글은 묶음으로 나눠 채웁니다.
+    let done = 0;
+    const failed = [];
+    const chunkSize = 8;
+    for (let index = 0; index < pending.length; index += chunkSize) {
+      const chunk = pending.slice(index, index + chunkSize);
+      const result = await api('sync-threads-replies', { ids: chunk }, callTimeoutMs);
+      done += chunk.length;
+      failed.push(...(result.failed || []));
+      step(`원문 ${roots}편 · 이어 쓴 답글 ${done}/${pending.length} · ${elapsed()} 경과`);
+    }
+    if (pending.length) await loadThreadsImports();
+
+    if (failed.length) {
+      step(`원문 ${roots}편은 저장했지만 답글 ${failed.length}건을 가져오지 못했습니다 — ${failed[0].error} (${elapsed()} 소요)`, true);
+    } else if (!roots) {
+      step(`Threads에서 가져올 원문이 없었습니다. 계정 연결과 토큰 만료일을 확인해 주세요. (${elapsed()} 소요)`, true);
+    } else {
+      step(`원문 ${roots}편, 이어 쓴 답글 ${done}편을 확인했습니다. (${elapsed()} 소요)`);
+    }
+    message(adminMessage, `Threads 원고 ${roots}편을 확인했습니다.`);
+  } catch (error) {
+    // 실패해도 이 영역에 계속 남겨서 어디까지 갔는지 보이게 합니다.
+    step(`가져오기 실패 (${elapsed()} 경과) — ${error.message}`, true);
+    message(adminMessage, error.message, true);
+    await loadThreadsImports().catch(() => {});
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Threads에서 새로 가져오기';
+  }
 });
 document.querySelector('#save-threads-secret').addEventListener('click', async () => {
   const input = document.querySelector('#threads-app-secret');
