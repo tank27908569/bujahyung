@@ -1,0 +1,227 @@
+:root{
+  --ink:#171815;
+  --ground:#131410;
+  --card:#1e1f1b;
+  --card-hover:#272822;
+  --line:#333430;
+  --line-2:#45463f;
+  --paper:#f1eee6;
+  --paper-dim:#a8a59c;
+  --paper-mute:#7c7a73;
+  --red:#8f2e25;
+  --red-bright:#c75a4c;
+  --gold:#b89b68;
+  --gold-dim:#8a7449;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+
+body{
+  background:var(--ground);
+  color:var(--paper);
+  font-family:'Noto Sans KR',sans-serif;
+  font-size:16px;
+  line-height:1.6;
+  word-break:keep-all;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+  padding:0 20px calc(46px + env(safe-area-inset-bottom));
+  position:relative;
+}
+
+/* 사이트 본문과 같은 그레인 질감 */
+.grain{
+  position:fixed;inset:0;pointer-events:none;z-index:100;opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E");
+}
+
+body:before{
+  content:"富";
+  position:fixed;
+  font:400 78vw 'Gowun Batang',serif;
+  color:rgba(255,255,255,.014);
+  left:-22vw;top:-14vw;
+  pointer-events:none;
+  z-index:0;
+}
+
+.page{max-width:440px;margin:0 auto;position:relative;z-index:1}
+
+/* ---------- 프로필 ---------- */
+.profile{padding:46px 0 26px;text-align:center}
+
+.avatar{
+  width:104px;height:104px;margin:0 auto 20px;
+  position:relative;
+}
+.avatar img{
+  width:100%;height:100%;
+  object-fit:cover;object-position:50% 22%;
+  border-radius:50%;
+  filter:grayscale(.35) contrast(1.03);
+  border:1px solid var(--line-2);
+}
+.avatar .stamp{
+  position:absolute;right:-4px;bottom:-2px;
+  width:36px;height:36px;
+  background:var(--red);
+  display:grid;place-items:center;
+  font:400 19px 'Gowun Batang',serif;
+  color:#f1eee6;
+  border-radius:3px;
+  box-shadow:inset 0 0 0 4px var(--red),inset 0 0 0 5px rgba(255,255,255,.4);
+}
+
+h1{
+  font-family:'Gowun Batang',serif;
+  font-weight:700;
+  font-size:28px;
+  letter-spacing:-.05em;
+  line-height:1.3;
+}
+.role{
+  margin-top:8px;
+  font-size:11px;
+  letter-spacing:.22em;
+  color:var(--gold);
+  font-weight:600;
+}
+.bio{
+  margin-top:16px;
+  font:400 15px/1.85 'Gowun Batang',serif;
+  color:var(--paper-dim);
+}
+.bio b{color:var(--paper);font-weight:700}
+
+.creds{margin-top:16px;display:flex;justify-content:center;flex-wrap:wrap;gap:7px}
+.cred{
+  font-size:11px;
+  letter-spacing:.02em;
+  color:var(--paper-dim);
+  border:1px solid var(--line-2);
+  padding:5px 12px;
+}
+
+/* ---------- 소셜 ---------- */
+.socials{display:flex;justify-content:center;gap:9px;padding:26px 0 6px}
+.soc{
+  width:44px;height:44px;
+  display:grid;place-items:center;
+  border:1px solid var(--line);
+  background:var(--card);
+  color:var(--paper-dim);
+  transition:.22s;
+}
+.soc svg{width:19px;height:19px;display:block}
+.soc:hover,.soc:focus-visible{color:var(--paper);border-color:var(--gold-dim);background:var(--card-hover);transform:translateY(-2px)}
+.soc:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* ---------- 링크 ---------- */
+.links{display:flex;flex-direction:column;gap:10px;padding-top:22px}
+
+.group-label{
+  display:flex;align-items:center;gap:12px;
+  margin:22px 0 2px;
+  font-size:10px;
+  letter-spacing:.2em;
+  color:var(--paper-mute);
+}
+.group-label span{font-family:'Gowun Batang',serif;color:var(--red-bright);font-size:13px;letter-spacing:0}
+.group-label:after{content:"";flex:1;height:1px;background:var(--line)}
+
+a.card{
+  display:grid;
+  grid-template-columns:46px 1fr auto;
+  align-items:center;
+  gap:14px;
+  padding:15px 16px;
+  background:var(--card);
+  border:1px solid var(--line);
+  text-decoration:none;
+  color:inherit;
+  transition:.22s;
+}
+a.card:hover,a.card:focus-visible{background:var(--card-hover);border-color:var(--line-2);transform:translateY(-2px)}
+a.card:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+a.card:active{transform:translateY(0)}
+
+.ico{
+  width:46px;height:46px;
+  display:grid;place-items:center;
+  background:var(--ground);
+  border:1px solid var(--line);
+  font:400 20px 'Gowun Batang',serif;
+  color:var(--gold);
+  line-height:1;
+}
+.txt{min-width:0}
+.txt .t{display:block;font-size:15px;font-weight:500;line-height:1.45}
+.txt .s{display:block;font-size:12.5px;color:var(--paper-mute);margin-top:3px;line-height:1.55;font-weight:300}
+.chev{color:var(--paper-mute);font-size:18px;line-height:1}
+
+/* 대표 CTA */
+a.card.primary{
+  grid-template-columns:1fr;
+  gap:0;
+  padding:24px 22px;
+  background:linear-gradient(158deg,#2b1a16 0%,#1d1613 100%);
+  border-color:#5c2a22;
+  position:relative;
+  overflow:hidden;
+}
+a.card.primary:before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(78% 120% at 12% 0%,rgba(199,90,76,.2) 0%,transparent 58%);
+}
+a.card.primary:hover{border-color:var(--red-bright);background:linear-gradient(158deg,#341f1a 0%,#241a16 100%)}
+.primary .kicker{display:block;font-size:10px;letter-spacing:.22em;color:var(--red-bright);font-weight:600}
+.primary .t{
+  display:block;
+  font:400 22px/1.4 'Gowun Batang',serif;
+  letter-spacing:-.045em;
+  margin-top:9px;
+}
+.primary .s{display:block;font-size:13.5px;color:var(--paper-dim);margin-top:9px;font-weight:300;line-height:1.7}
+.primary .go{margin-top:16px;display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--red-bright)}
+
+/* 준비중 */
+.card.soon{opacity:.45;pointer-events:none}
+.badge{
+  font-size:10px;letter-spacing:.1em;
+  color:var(--paper-mute);border:1px solid var(--line-2);
+  padding:3px 9px;white-space:nowrap;
+}
+
+/* 저서 */
+a.book{
+  grid-template-columns:74px 1fr;
+  gap:18px;
+  padding:18px;
+  background:linear-gradient(150deg,#211f1b 0%,#191814 100%);
+  border-color:var(--line-2);
+  align-items:center;
+}
+.book img{width:74px;height:auto;aspect-ratio:458/682;object-fit:cover;display:block;box-shadow:6px 8px 16px rgba(0,0,0,.45)}
+.book .label{display:block;font-size:10px;letter-spacing:.2em;color:var(--gold)}
+.book .t{display:block;font:400 17px/1.45 'Gowun Batang',serif;margin-top:8px;letter-spacing:-.04em}
+.book .s{display:block;font-size:12px;color:var(--paper-mute);margin-top:7px;line-height:1.55}
+
+/* 푸터 */
+footer{
+  margin-top:36px;padding-top:22px;
+  border-top:1px solid var(--line);
+  text-align:center;
+  font-size:11px;
+  letter-spacing:.05em;
+  color:var(--paper-mute);
+  line-height:1.9;
+}
+footer .name{color:var(--paper-dim);font-family:'Gowun Batang',serif;font-size:13px}
+footer .disc{margin-top:9px;font-size:10.5px;color:#615f59;line-height:1.75}
+
+@media(max-width:400px){
+  h1{font-size:25px}
+  .primary .t{font-size:20px}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
