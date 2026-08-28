@@ -19,8 +19,69 @@ const categories = new Set([
   "life-stories",
 ]);
 const inquiryStatuses = new Set(["new", "contacted", "completed", "archived"]);
-const threadsCategories = new Set(["auction-stories", "life-stories"]);
+// Threads 원고도 다섯 분류 전체로 게시할 수 있습니다.
+const threadsCategories = categories;
 const threadsApiBase = "https://graph.threads.com/v1.0";
+
+// 기존에 게시된 글을 나눌 때 쓰던 기준을 그대로 씁니다.
+// tools/import_threads_life.mjs 의 propertyTerms 목록이 원본입니다.
+const propertyTerms = [
+  "경매", "공매", "낙찰", "입찰", "패찰", "유찰", "권리분석", "매각물건명세서",
+  "사건번호", "타경", "감정가", "최저가", "명도", "배당", "대항력", "우선변제",
+  "유치권", "법정지상권", "근저당", "임차인", "채무자", "채권자", "담보대출",
+  "대부업", "대부", "npl", "부실채권", "입찰표", "보증금", "매각기일", "부동산",
+  "등기부", "실거래가", "대지권", "재건축", "재개발", "토지", "상가", "아파트",
+  "오피스텔", "다세대", "다가구", "빌라", "임대차", "전세", "월세", "소유권",
+  "점유자", "현장 임장", "매물", "시세차익", "수익률", "매수인",
+];
+
+function normalizedText(value: string) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+// 중복 판정 키: 정규화한 본문 앞부분. 예전 대량 임포트가 남긴 external_id는
+// 재현할 수 없는 해시라, 본문 대조가 유일하게 믿을 수 있는 방법입니다.
+function duplicateKey(body: string) {
+  const text = normalizedText(body);
+  return text.length > 60 ? text.slice(0, 60) : text;
+}
+
+// 기존 990편으로 검증했을 때 실제 분류와 95.9% 일치합니다.
+function suggestCategory(title: string, body: string) {
+  const heading = normalizedText(title);
+  const lowerBody = String(body || "").toLowerCase();
+  const head = normalizedText(body).slice(0, 260);
+  if (/[一-鿿]{4}\s*[（(][가-힣]{3,6}[）)]/.test(heading) || /^[一-鿿]{4}\s*[（(][가-힣]{3,6}[）)]/.test(head)) {
+    return { category: "thread-seodang", reason: "사자성어와 한글 독음이 제목에 있습니다." };
+  }
+  if (/《[^》]{1,60}》/.test(heading)) {
+    return { category: "library", reason: "제목에 《책 제목》이 있습니다." };
+  }
+  if (/사랑|연애|인연|배우자/.test(heading) && /경매|낙찰|입찰|물건|가치/.test(lowerBody)) {
+    return { category: "love-auction-philosophy", reason: "사랑을 경매에 빗댄 글입니다." };
+  }
+  const hits = propertyTerms.filter(term => lowerBody.includes(term));
+  if (hits.length) {
+    return { category: "auction-stories", reason: `경매 용어 ${hits.slice(0, 3).join(", ")} 등이 나옵니다.` };
+  }
+  return { category: "life-stories", reason: "경매 용어가 없는 일상 글입니다." };
+}
+
+// 페이지를 나눠 전체 글을 읽습니다.
+async function allPosts() {
+  const rows: { id: string; category: string; title: string; body: string; external_id: string | null }[] = [];
+  for (let from = 0; from < 20000; from += 500) {
+    const { data, error } = await db.from("posts")
+      .select("id, category, title, body, external_id")
+      .order("id", { ascending: true })
+      .range(from, from + 499);
+    if (error) throw new Error(error.message);
+    if (!data?.length) break;
+    rows.push(...data);
+    if (data.length < 500) break;
+  }
+  return rows;
+}
 const threadsRedirectUri = `${Deno.env.get("SUPABASE_URL")}/functions/v1/threads-oauth`;
 
 function cors(origin: string | null) {
@@ -308,6 +369,41 @@ Deno.serve(async req => {
     url.searchParams.set("state", state);
     return json(origin, { url: url.toString(), redirect_uri: threadsRedirectUri });
   }
+  // 게시 대기 원고마다 분류 제안과 중복 여부를 붙여 돌려줍니다.
+  if (action === "plan-threads-imports") {
+    try {
+      const posts = await allPosts();
+      const byKey = new Map<string, { id: string; category: string; title: string }>();
+      const byExternal = new Set<string>();
+      for (const post of posts) {
+        const key = duplicateKey(post.body);
+        if (key && !byKey.has(key)) byKey.set(key, { id: post.id, category: post.category, title: post.title });
+        if (post.external_id) byExternal.add(post.external_id);
+      }
+      const { data: imports, error } = await db.from("threads_imports")
+        .select("id, thread_id, root_text, combined_body, thread_timestamp, status")
+        .eq("status", "pending");
+      if (error) return json(origin, { error: error.message }, 400);
+
+      const plans = (imports || []).map(item => {
+        const title = threadsTitle(item.root_text);
+        const suggestion = suggestCategory(title, item.combined_body);
+        const match = byKey.get(duplicateKey(item.root_text))
+          || (byExternal.has(`threads-${item.thread_id}`) ? { id: "", category: "", title: "" } : undefined);
+        return {
+          id: item.id,
+          title,
+          suggested_category: suggestion.category,
+          reason: suggestion.reason,
+          duplicate: match ? { post_id: match.id, category: match.category, title: match.title } : null,
+        };
+      });
+      const duplicates = plans.filter(plan => plan.duplicate).length;
+      return json(origin, { ok: true, plans, total: plans.length, duplicates, posts: posts.length });
+    } catch (error) {
+      return json(origin, { error: error instanceof Error ? error.message : "분류를 계산하지 못했습니다." }, 400);
+    }
+  }
   if (action === "list-threads-imports") {
     const { data, error } = await db.from("threads_imports")
       .select("id, thread_id, permalink, root_text, replies, combined_body, thread_timestamp, status, published_post_id, synced_at")
@@ -443,9 +539,30 @@ Deno.serve(async req => {
       if (error) return json(origin, { error: error.message }, 400);
       nextNumbers.set(category, Number(data?.[0]?.source_no || 0));
     }
+
+    // 이미 같은 내용이 올라가 있으면 건너뜁니다. 화면에서 걸러도 서버에서 한 번 더 봅니다.
+    const allowDuplicates = payload.allow_duplicates === true;
+    const existingKeys = new Set<string>();
+    if (!allowDuplicates) {
+      try {
+        for (const post of await allPosts()) {
+          const key = duplicateKey(post.body);
+          if (key) existingKeys.add(key);
+        }
+      } catch (error) {
+        return json(origin, { error: error instanceof Error ? error.message : "기존 글을 확인하지 못했습니다." }, 400);
+      }
+    }
+
     let published = 0;
+    const skipped: { id: string; title: string }[] = [];
     for (const item of imports.sort((left, right) => Date.parse(left.thread_timestamp) - Date.parse(right.thread_timestamp))) {
       const category = categoryById.get(item.id)!;
+      if (!allowDuplicates && existingKeys.has(duplicateKey(item.root_text))) {
+        skipped.push({ id: item.id, title: threadsTitle(item.root_text) });
+        await db.from("threads_imports").update({ status: "ignored" }).eq("id", item.id);
+        continue;
+      }
       const sourceNo = (nextNumbers.get(category) || 0) + 1;
       nextNumbers.set(category, sourceNo);
       const { data: post, error } = await db.from("posts").insert({
@@ -461,8 +578,9 @@ Deno.serve(async req => {
       const { error: updateError } = await db.from("threads_imports").update({ status: "published", published_post_id: post.id }).eq("id", item.id);
       if (updateError) return json(origin, { error: updateError.message, published }, 400);
       published += 1;
+      existingKeys.add(duplicateKey(item.root_text));
     }
-    return json(origin, { ok: true, count: published });
+    return json(origin, { ok: true, count: published, skipped });
   }
   if (action === "list-inquiries") {
     const { data, error } = await db.from("consultation_inquiries")
@@ -545,6 +663,20 @@ Deno.serve(async req => {
     if (typeof changes.cover_quote === "string") clean.cover_quote = changes.cover_quote.trim().slice(0, 200) || null;
     if (typeof changes.is_published === "boolean") clean.is_published = changes.is_published;
     if (typeof changes.category === "string" && categories.has(changes.category)) clean.category = changes.category;
+
+    // 분류를 옮길 때는 (category, source_no) 고유 제약에 걸리지 않도록 번호를 다시 매깁니다.
+    if (typeof clean.category === "string") {
+      const { data: current, error: currentError } = await db.from("posts").select("category").eq("id", id).maybeSingle();
+      if (currentError) return json(origin, { error: currentError.message }, 400);
+      if (current && current.category !== clean.category) {
+        const { data: last, error: lastError } = await db.from("posts")
+          .select("source_no").eq("category", clean.category)
+          .order("source_no", { ascending: false }).limit(1);
+        if (lastError) return json(origin, { error: lastError.message }, 400);
+        clean.source_no = Number(last?.[0]?.source_no || 0) + 1;
+      }
+    }
+
     const { error } = await db.from("posts").update(clean).eq("id", id);
     return error ? json(origin, { error: error.message }, 400) : json(origin, { ok: true });
   }

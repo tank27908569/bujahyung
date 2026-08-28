@@ -74,8 +74,9 @@
           <label class="search-box"><span class="sr-only">Threads 원고 검색</span><input id="threads-search" type="search" placeholder="원문 또는 이어 쓴 답글 검색"></label>
           <label class="form-field inline-field"><span class="sr-only">가져오기 상태</span><select id="threads-status-filter"><option value="pending">게시 대기</option><option value="published">게시 완료</option><option value="all">전체</option></select></label>
         </div>
+        <div id="threads-plan-summary"></div>
         <div id="threads-import-list" class="source-list"><div class="loading">Threads 원고를 불러오고 있습니다.</div></div>
-        <div class="selection-bar"><p><strong id="threads-selection-count">0</strong>편 선택됨</p><button id="publish-threads-selected" class="primary-button" type="button" disabled>선택한 글 게시</button></div>
+        <div class="selection-bar"><p><strong id="threads-selection-count">0</strong>편 선택됨</p><button id="select-suggested-threads" class="secondary-button" type="button">중복 빼고 제안대로 전체 선택</button><button id="publish-threads-selected" class="primary-button" type="button" disabled>선택한 글 게시</button></div>
       </section>
 
       <section id="view-published" class="admin-view">

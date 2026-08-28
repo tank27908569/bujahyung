@@ -30,6 +30,7 @@ let posts = [];
 let inquiries = [];
 let selectedThreads = new Set();
 let threadsIntegration = null;
+let threadsPlans = new Map();
 
 function escapeHtml(value = '') {
   return String(value).replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
@@ -220,14 +221,24 @@ function renderThreadsImports() {
   }
   threadsImportList.innerHTML = items.map(item => {
     const published = item.status === 'published';
+    const plan = threadsPlans.get(item.id);
+    const duplicate = plan?.duplicate || null;
+    const locked = published || Boolean(duplicate);
     const replies = Array.isArray(item.replies) ? item.replies : [];
     const replyMarkup = replies.length
       ? `<div class="threads-replies"><small>이어 쓴 답글 ${replies.length}개</small>${replies.map((reply, index) => `<p><b>답글 ${index + 1}</b>${escapeHtml(reply.text)}</p>`).join('')}</div>`
       : '<div class="threads-replies"><small>이어 쓴 답글 없음</small></div>';
+    const state = published ? '게시 완료' : duplicate ? '이미 게시됨 · 건너뜀' : '게시 대기';
+    const planMarkup = duplicate
+      ? `<p class="notice error">이미 «${escapeHtml(categories[duplicate.category] || duplicate.category)}»에 «${escapeHtml(duplicate.title || '같은 글')}»로 올라가 있습니다.</p>`
+      : plan ? `<p class="notice">제안: ${escapeHtml(categories[plan.suggested_category] || plan.suggested_category)} — ${escapeHtml(plan.reason)}</p>` : '';
+    const options = Object.entries(categories)
+      .map(([value, label]) => `<option value="${value}"${plan && plan.suggested_category === value ? ' selected' : ''}>${label}</option>`)
+      .join('');
     return `<article class="source-item threads-import-item" data-id="${escapeHtml(item.id)}">
-      <input id="threads-${escapeHtml(item.id)}" type="checkbox" ${selectedThreads.has(item.id) ? 'checked' : ''} ${published ? 'disabled' : ''}>
-      <label for="threads-${escapeHtml(item.id)}"><span class="source-no">${published ? '게시 완료' : '게시 대기'} · ${new Date(item.thread_timestamp).toLocaleDateString('ko-KR')}</span><h3>${escapeHtml(item.root_text.split(/\r?\n/)[0])}</h3><p>${escapeHtml(item.root_text)}</p>${replyMarkup}</label>
-      <div class="threads-import-controls"><select aria-label="게시 분류" ${published ? 'disabled' : ''}><option value="life-stories">살아가는 이런저런 이야기</option><option value="auction-stories">경매실전 이야기</option></select>${item.permalink ? `<a class="secondary-button" href="${escapeHtml(item.permalink)}" target="_blank" rel="noopener">원문 보기 ↗</a>` : ''}</div>
+      <input id="threads-${escapeHtml(item.id)}" type="checkbox" ${selectedThreads.has(item.id) ? 'checked' : ''} ${locked ? 'disabled' : ''}>
+      <label for="threads-${escapeHtml(item.id)}"><span class="source-no">${state} · ${new Date(item.thread_timestamp).toLocaleDateString('ko-KR')}</span><h3>${escapeHtml(item.root_text.split(/\r?\n/)[0])}</h3><p>${escapeHtml(item.root_text)}</p>${planMarkup}${replyMarkup}</label>
+      <div class="threads-import-controls"><select aria-label="게시 분류" ${locked ? 'disabled' : ''}>${options}</select>${item.permalink ? `<a class="secondary-button" href="${escapeHtml(item.permalink)}" target="_blank" rel="noopener">원문 보기 ↗</a>` : ''}</div>
     </article>`;
   }).join('');
 }
@@ -290,8 +301,28 @@ async function loadPosts(preloaded) {
 async function loadThreadsImports(preloaded) {
   threadsImports = preloaded || (await api('list-threads-imports')).imports || [];
   selectedThreads = new Set([...selectedThreads].filter(id => threadsImports.some(item => item.id === id && item.status === 'pending')));
+  await loadThreadsPlans();
   renderThreadsImports();
   threadsSelectionStatus();
+}
+
+// 게시 대기 원고마다 분류 제안과 중복 여부를 받아옵니다. 실패해도 목록은 그대로 보여줍니다.
+async function loadThreadsPlans() {
+  const planSummary = document.querySelector('#threads-plan-summary');
+  if (!threadsImports.some(item => item.status === 'pending')) {
+    threadsPlans = new Map();
+    message(planSummary, '');
+    return;
+  }
+  try {
+    const result = await api('plan-threads-imports', {}, 60000);
+    threadsPlans = new Map((result.plans || []).map(plan => [plan.id, plan]));
+    const fresh = result.total - result.duplicates;
+    message(planSummary, `게시 대기 ${result.total}편 가운데 ${result.duplicates}편은 이미 올라간 글이라 제외했습니다. 새로 게시할 수 있는 글은 ${fresh}편입니다. 분류는 기존 ${result.posts}편을 기준으로 제안한 것이라 바꾸셔도 됩니다.`);
+  } catch (error) {
+    threadsPlans = new Map();
+    message(planSummary, `분류 제안을 불러오지 못했습니다 — ${error.message}`, true);
+  }
 }
 
 async function loadThreadsIntegration() {
@@ -502,11 +533,25 @@ document.querySelector('#publish-threads-selected').addEventListener('click', as
   });
   if (!selections.length) return;
   try {
-    const result = await api('publish-threads-imports', { selections });
+    const result = await api('publish-threads-imports', { selections }, 120000);
     selectedThreads.clear();
     await Promise.all([loadThreadsImports(), loadPosts()]);
-    message(adminMessage, `${result.count}편을 선택한 분류에 공개 게시했습니다.`);
+    const skipped = (result.skipped || []).length;
+    message(adminMessage, skipped
+      ? `${result.count}편을 게시했습니다. 이미 같은 글이 있어 ${skipped}편은 건너뛰었습니다.`
+      : `${result.count}편을 선택한 분류에 공개 게시했습니다.`);
   } catch (error) { message(adminMessage, error.message, true); }
+});
+
+// 중복이 아닌 게시 대기 원고를 제안 분류 그대로 한 번에 고릅니다.
+document.querySelector('#select-suggested-threads').addEventListener('click', () => {
+  const targets = filteredThreadsImports()
+    .filter(item => item.status === 'pending' && !threadsPlans.get(item.id)?.duplicate);
+  if (!targets.length) { message(adminMessage, '선택할 수 있는 새 원고가 없습니다.', true); return; }
+  targets.forEach(item => selectedThreads.add(item.id));
+  renderThreadsImports();
+  threadsSelectionStatus();
+  message(adminMessage, `${targets.length}편을 제안 분류로 선택했습니다. 분류를 바꾸고 싶은 글은 각 항목의 선택 상자에서 고치시면 됩니다.`);
 });
 
 document.querySelectorAll('.admin-tab').forEach(tab => tab.addEventListener('click', () => {
