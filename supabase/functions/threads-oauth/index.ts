@@ -123,11 +123,11 @@ Deno.serve(async request => {
       grant_type: "authorization_code",
       redirect_uri: redirectUri,
     });
-    const shortResponse = await fetch("https://graph.threads.net/oauth/access_token", { method: "POST", body: tokenBody });
+    const shortResponse = await fetch("https://graph.threads.com/oauth/access_token", { method: "POST", body: tokenBody });
     const shortToken = await shortResponse.json();
     if (!shortResponse.ok || !shortToken.access_token) throw new Error(shortToken?.error_message || shortToken?.error?.message || "단기 토큰을 발급하지 못했습니다.");
 
-    const longUrl = new URL("https://graph.threads.net/access_token");
+    const longUrl = new URL("https://graph.threads.com/access_token");
     longUrl.searchParams.set("grant_type", "th_exchange_token");
     longUrl.searchParams.set("client_secret", appSecret);
     longUrl.searchParams.set("access_token", shortToken.access_token);
@@ -135,7 +135,7 @@ Deno.serve(async request => {
     const longToken = await longResponse.json();
     if (!longResponse.ok || !longToken.access_token) throw new Error(longToken?.error?.message || "장기 토큰을 발급하지 못했습니다.");
 
-    const meUrl = new URL("https://graph.threads.net/v1.0/me");
+    const meUrl = new URL("https://graph.threads.com/v1.0/me");
     meUrl.searchParams.set("fields", "id,username");
     meUrl.searchParams.set("access_token", longToken.access_token);
     const meResponse = await fetch(meUrl);

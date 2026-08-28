@@ -439,7 +439,7 @@ document.querySelector('#save-threads-secret').addEventListener('click', async (
 document.querySelector('#connect-threads-account').addEventListener('click', async () => {
   try {
     const result = await api('threads-oauth-url');
-    location.href = result.url;
+    window.open(result.url, '_blank', 'noopener');
   } catch (error) { message(adminMessage, error.message, true); }
 });
 document.querySelector('#publish-threads-selected').addEventListener('click', async () => {

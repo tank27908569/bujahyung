@@ -20,7 +20,7 @@ const categories = new Set([
 ]);
 const inquiryStatuses = new Set(["new", "contacted", "completed", "archived"]);
 const threadsCategories = new Set(["auction-stories", "life-stories"]);
-const threadsApiBase = "https://graph.threads.net/v1.0";
+const threadsApiBase = "https://graph.threads.com/v1.0";
 const threadsRedirectUri = `${Deno.env.get("SUPABASE_URL")}/functions/v1/threads-oauth`;
 
 function cors(origin: string | null) {
@@ -271,7 +271,7 @@ Deno.serve(async req => {
       oauth_state_expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     }).eq("id", 1);
     if (stateError) return json(origin, { error: stateError.message }, 400);
-    const url = new URL("https://threads.net/oauth/authorize");
+    const url = new URL("https://threads.com/oauth/authorize");
     url.searchParams.set("client_id", data.app_id);
     url.searchParams.set("redirect_uri", threadsRedirectUri);
     url.searchParams.set("scope", "threads_basic,threads_read_replies");
