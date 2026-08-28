@@ -209,17 +209,21 @@ Deno.serve(async req => {
       "image/png": "png",
       "image/webp": "webp",
       "image/gif": "gif",
+      "video/mp4": "mp4",
+      "video/webm": "webm",
     };
-    if (!extensions[mime]) return json(origin, { error: "JPG, PNG, WEBP, GIF 사진만 올릴 수 있습니다." }, 400);
-    if (!Number.isFinite(reportedSize) || reportedSize <= 0 || reportedSize > 8 * 1024 * 1024) return json(origin, { error: "사진은 한 장당 8MB까지 올릴 수 있습니다." }, 400);
+    const isVideo = mime.startsWith("video/");
+    const maxSize = isVideo ? 12 * 1024 * 1024 : 8 * 1024 * 1024;
+    if (!extensions[mime]) return json(origin, { error: "JPG, PNG, WEBP, GIF 사진 또는 MP4, WEBM 동영상만 올릴 수 있습니다." }, 400);
+    if (!Number.isFinite(reportedSize) || reportedSize <= 0 || reportedSize > maxSize) return json(origin, { error: isVideo ? "동영상은 한 개당 12MB까지 올릴 수 있습니다." : "사진은 한 장당 8MB까지 올릴 수 있습니다." }, 400);
     let bytes: Uint8Array;
     try { bytes = Uint8Array.from(atob(base64), character => character.charCodeAt(0)); }
-    catch { return json(origin, { error: "사진 파일 형식이 올바르지 않습니다." }, 400); }
-    if (!bytes.length || bytes.length > 8 * 1024 * 1024 || Math.abs(bytes.length - reportedSize) > 3) return json(origin, { error: "사진 파일 크기를 확인해 주세요." }, 400);
+    catch { return json(origin, { error: "미디어 파일 형식이 올바르지 않습니다." }, 400); }
+    if (!bytes.length || bytes.length > maxSize || Math.abs(bytes.length - reportedSize) > 3) return json(origin, { error: "미디어 파일 크기를 확인해 주세요." }, 400);
     const now = new Date();
     const path = `${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, "0")}/${crypto.randomUUID()}.${extensions[mime]}`;
     const { error } = await db.storage.from("post-images").upload(path, bytes, { contentType: mime, upsert: false, cacheControl: "31536000" });
-    if (error) return json(origin, { error: `사진을 저장하지 못했습니다: ${error.message}` }, 400);
+    if (error) return json(origin, { error: `미디어를 저장하지 못했습니다: ${error.message}` }, 400);
     const { data } = db.storage.from("post-images").getPublicUrl(path);
     return json(origin, { ok: true, url: data.publicUrl });
   }

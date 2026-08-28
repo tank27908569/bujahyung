@@ -67,9 +67,45 @@ function fileBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
-    reader.onerror = () => reject(new Error('사진 파일을 읽지 못했습니다.'));
+    reader.onerror = () => reject(new Error('파일을 읽지 못했습니다.'));
     reader.readAsDataURL(file);
   });
+}
+
+async function uploadSelectedVideos(fileInput, statusTarget) {
+  const files = [...fileInput.files];
+  if (!files.length) return [];
+  if (files.length > 3) {
+    message(adminMessage, '동영상은 한 번에 최대 3개까지 선택할 수 있습니다.', true);
+    fileInput.value = '';
+    return [];
+  }
+  const uploaded = [];
+  fileInput.disabled = true;
+  try {
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index];
+      if (!['video/mp4', 'video/webm'].includes(file.type)) throw new Error('MP4, WEBM 동영상만 올릴 수 있습니다.');
+      if (file.size > 12 * 1024 * 1024) throw new Error(`${file.name} 동영상이 12MB를 넘습니다.`);
+      statusTarget.textContent = `동영상을 올리는 중입니다. (${index + 1}/${files.length})`;
+      const result = await api('upload-post-image', {
+        file_name: file.name,
+        file_type: file.type,
+        file_size: file.size,
+        file_base64: await fileBase64(file)
+      });
+      uploaded.push(result.url);
+    }
+    statusTarget.textContent = `동영상 ${uploaded.length}개를 올렸습니다.`;
+    return uploaded;
+  } catch (error) {
+    statusTarget.textContent = '동영상 업로드에 실패했습니다.';
+    message(adminMessage, error.message, true);
+    return [];
+  } finally {
+    fileInput.disabled = false;
+    fileInput.value = '';
+  }
 }
 
 async function uploadSelectedImages(fileInput, statusTarget) {
@@ -134,6 +170,27 @@ async function uploadInlineImages(fileInput, textarea, positionSelect, statusTar
   }
   statusTarget.textContent = `본문에 사진 ${uploaded.length}장을 넣었습니다.`;
   message(adminMessage, `본문에 사진 ${uploaded.length}장을 넣었습니다. 글을 저장하면 적용됩니다.`);
+  textarea.focus();
+}
+
+async function uploadInlineVideos(fileInput, textarea, positionSelect, statusTarget) {
+  const cursorPosition = textarea.selectionStart;
+  const uploaded = await uploadSelectedVideos(fileInput, statusTarget);
+  if (!uploaded.length) return;
+  const markers = uploaded.map(url => `[[동영상:${url}]]`).join('\n\n');
+  const position = positionSelect.value;
+  const body = textarea.value;
+  if (position === 'start') {
+    textarea.value = `${markers}\n\n${body}`.trim();
+  } else if (position === 'end') {
+    textarea.value = `${body}\n\n${markers}`.trim();
+  } else {
+    const before = body.slice(0, cursorPosition).replace(/\s*$/, '');
+    const after = body.slice(cursorPosition).replace(/^\s*/, '');
+    textarea.value = `${before}${before ? '\n\n' : ''}${markers}${after ? `\n\n${after}` : ''}`;
+  }
+  statusTarget.textContent = `본문에 동영상 ${uploaded.length}개를 넣었습니다.`;
+  message(adminMessage, `본문에 동영상 ${uploaded.length}개를 넣었습니다. 글을 저장하면 적용됩니다.`);
   textarea.focus();
 }
 
@@ -332,6 +389,20 @@ document.querySelector('#edit-inline-image-files').addEventListener('change', ev
   document.querySelector('#edit-body'),
   document.querySelector('#edit-inline-position'),
   document.querySelector('#edit-inline-upload-status')
+));
+
+document.querySelector('#create-inline-video-files').addEventListener('change', event => uploadInlineVideos(
+  event.currentTarget,
+  document.querySelector('#create-body'),
+  document.querySelector('#create-inline-video-position'),
+  document.querySelector('#create-inline-video-upload-status')
+));
+
+document.querySelector('#edit-inline-video-files').addEventListener('change', event => uploadInlineVideos(
+  event.currentTarget,
+  document.querySelector('#edit-body'),
+  document.querySelector('#edit-inline-video-position'),
+  document.querySelector('#edit-inline-video-upload-status')
 ));
 
 threadsImportList.addEventListener('change', event => {

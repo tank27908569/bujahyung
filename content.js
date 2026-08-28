@@ -60,22 +60,32 @@ function readableParagraphs(value = '') {
 function renderReaderBody(value) {
   const readerBody = document.querySelector('#reader-body');
   readerBody.replaceChildren();
-  const imagePattern = /^\[\[사진:(https?:\/\/[^\]]+)\]\]$/gm;
+  const mediaPattern = /^\[\[(사진|동영상):(https?:\/\/[^\]]+)\]\]$/gm;
   let offset = 0;
   const appendText = text => readableParagraphs(text).forEach(paragraph => {
     const node = document.createElement('p');
     node.textContent = paragraph;
     readerBody.appendChild(node);
   });
-  for (const match of String(value).matchAll(imagePattern)) {
+  for (const match of String(value).matchAll(mediaPattern)) {
     appendText(String(value).slice(offset, match.index));
     const figure = document.createElement('figure');
-    figure.className = 'reader-inline-image';
-    const image = document.createElement('img');
-    image.src = match[1];
-    image.alt = '글 내용 사진';
-    image.loading = 'lazy';
-    figure.appendChild(image);
+    if (match[1] === '동영상') {
+      figure.className = 'reader-inline-video';
+      const video = document.createElement('video');
+      video.src = match[2];
+      video.controls = true;
+      video.preload = 'metadata';
+      video.playsInline = true;
+      figure.appendChild(video);
+    } else {
+      figure.className = 'reader-inline-image';
+      const image = document.createElement('img');
+      image.src = match[2];
+      image.alt = '글 내용 사진';
+      image.loading = 'lazy';
+      figure.appendChild(image);
+    }
     readerBody.appendChild(figure);
     offset = match.index + match[0].length;
   }
