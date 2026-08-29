@@ -2,7 +2,7 @@ const config = window.BUJAHYUNG_SUPABASE || {};
 const isConfigured = config.url && config.anonKey && !config.url.startsWith('__');
 const endpoint = isConfigured ? `${config.url}/functions/v1/admin-api` : '';
 const categories = {
-  'thread-seodang': '스레드 서당',
+  'thread-seodang': '부자형 서당',
   library: '부자형의 서재',
   'love-auction-philosophy': '부자형이 전하는 사랑의 경매 철학',
   'auction-stories': '경매실전 이야기',
