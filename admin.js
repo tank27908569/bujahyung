@@ -356,6 +356,21 @@ function pickMoney(value) {
   return `${Math.round(amount / 10000).toLocaleString('ko-KR')}만원`;
 }
 
+// 스레드 글에 붙어 있던 사진을 검토 화면에 펼쳐 둡니다.
+// 소재지·입찰일·사건번호는 글이 아니라 이 명세 사진에 적혀 있습니다.
+function renderPickSourceImages(item) {
+  const box = document.querySelector('#pick-source-images');
+  if (!box) return;
+  const images = Array.isArray(item && item.source_images) ? item.source_images : [];
+  if (!images.length) { box.innerHTML = ''; box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = `<p class="upload-status">스레드에 함께 올린 사진 ${images.length}장입니다. 눌러서 크게 보고 소재지·입찰일·사건번호를 채우세요.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">${images.map((url, index) => `
+      <a href="${escapeHtml(url)}" target="_blank" rel="noopener" title="${index + 1}번째 사진 크게 보기" style="display:block;border:1px solid var(--line);background:#fff;line-height:0">
+        <img src="${escapeHtml(url)}" alt="첨부 사진 ${index + 1}" loading="lazy" style="width:150px;height:150px;object-fit:cover;display:block">
+      </a>`).join('')}</div>`;
+}
+
 // 스레드 글에는 소재지·입찰일·사건번호가 없습니다. 검토할 때 무엇을 채워야 하는지 알려줍니다.
 function pickMissingHint(item) {
   const missing = [];
@@ -371,7 +386,7 @@ function renderAuctionPicks() {
     pickAdminList.innerHTML = '<div class="empty-state"><strong>등록한 추천 물건이 없습니다.</strong><span>위 양식에서 첫 물건을 올려 보세요.</span></div>';
     return;
   }
-  pickAdminList.innerHTML = auctionPicks.map(item => `<article class="published-item" data-id="${item.id}"><span>${!item.is_published ? '확인 대기' : item.is_featured ? '대표 추천' : (item.status === 'closed' ? '마감' : '공개 중')}</span><div><small class="category-badge">${[item.property_type, item.case_number].filter(Boolean).map(escapeHtml).join(' · ')}</small><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.address || '소재지 미입력')} · <span class="pick-price">최저 ${pickMoney(item.minimum_price)}</span> · ${pickMissingHint(item)} ${item.is_published ? '공개 중' : '비공개'}</p></div><div class="published-actions"><a class="secondary-button" href="auction-picks.html" target="_blank" rel="noopener">보기</a><button class="secondary-button" type="button" data-action="edit-pick">수정</button><button class="secondary-button" type="button" data-action="toggle-pick">${item.is_published ? '비공개' : '공개'}</button><button class="danger-button" type="button" data-action="delete-pick">삭제</button></div></article>`).join('');
+  pickAdminList.innerHTML = auctionPicks.map(item => `<article class="published-item" data-id="${item.id}"><span>${!item.is_published ? '확인 대기' : item.is_featured ? '대표 추천' : (item.status === 'closed' ? '마감' : '공개 중')}</span><div><small class="category-badge">${[item.property_type, item.case_number].filter(Boolean).map(escapeHtml).join(' · ')}</small><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.address || '소재지 미입력')} · <span class="pick-price">최저 ${pickMoney(item.minimum_price)}</span> · ${pickMissingHint(item)}</p></div><div class="published-actions"><a class="secondary-button" href="auction-picks.html" target="_blank" rel="noopener">보기</a><button class="secondary-button" type="button" data-action="edit-pick">수정</button><button class="secondary-button" type="button" data-action="toggle-pick">${item.is_published ? '비공개' : '공개'}</button><button class="danger-button" type="button" data-action="delete-pick">삭제</button></div></article>`).join('');
 }
 
 async function loadAuctionPicks(preloaded) {
@@ -671,6 +686,7 @@ function resetPickForm() {
   document.querySelector('#pick-published').checked = true;
   document.querySelector('#pick-submit-label').textContent = '추천 물건 저장';
   document.querySelector('#pick-upload-status').textContent = 'JPG·PNG·WEBP·GIF, 최대 8MB';
+  renderPickSourceImages(null);
 }
 
 // 스레드에 올린 물건 브리핑을 비공개 초안으로 받아옵니다. 숫자를 확인하고 공개로 바꾸시면 됩니다.
@@ -756,6 +772,7 @@ pickAdminList.addEventListener('click', async event => {
     document.querySelector('#pick-published').checked = Boolean(item.is_published);
     document.querySelector('#pick-closed').checked = item.status === 'closed';
     document.querySelector('#pick-submit-label').textContent = '수정 내용 저장';
+    renderPickSourceImages(item);
     document.querySelector('#pick-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   if (button.dataset.action === 'toggle-pick') {

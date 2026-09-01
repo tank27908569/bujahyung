@@ -322,13 +322,7 @@ function parseAuctionPick(text: string, permalink: string | null) {
 }
 
 // 스레드 CDN 주소는 시간이 지나면 만료되므로 파일을 받아 우리 저장소에 옮깁니다.
-async function storeThreadsImage(item: ThreadsItem) {
-  const source = item.media_type === "IMAGE"
-    ? item.media_url
-    : item.media_type === "CAROUSEL_ALBUM"
-      ? (item.children?.data || []).find(child => child.media_type === "IMAGE")?.media_url
-      : item.thumbnail_url;
-  if (!source) return null;
+async function storeOneImage(source: string) {
   try {
     const response = await fetch(source, { signal: AbortSignal.timeout(threadsRequestTimeoutMs) });
     if (!response.ok) return null;
@@ -345,6 +339,30 @@ async function storeThreadsImage(item: ThreadsItem) {
   } catch {
     return null;   // 사진을 못 가져와도 물건 정보는 들어가게 둡니다.
   }
+}
+
+// 캐러셀에 붙은 사진을 순서대로 모두 가져옵니다.
+// 소재지·기일·사건번호는 보통 뒤쪽 명세 사진에 적혀 있습니다.
+const threadsImagesPerPick = 6;
+
+async function storeThreadsImages(item: ThreadsItem) {
+  const sources: string[] = [];
+  if (item.media_type === "CAROUSEL_ALBUM") {
+    for (const child of item.children?.data || []) {
+      const url = child.media_type === "VIDEO" ? child.thumbnail_url : child.media_url;
+      if (url) sources.push(url);
+    }
+  } else if (item.media_type === "IMAGE" && item.media_url) {
+    sources.push(item.media_url);
+  } else if (item.thumbnail_url) {
+    sources.push(item.thumbnail_url);
+  }
+  const stored: string[] = [];
+  for (const source of sources.slice(0, threadsImagesPerPick)) {
+    const url = await storeOneImage(source);
+    if (url) stored.push(url);
+  }
+  return stored;
 }
 
 function continuationReplies(rootId: string, conversation: ThreadsItem[]) {
@@ -471,9 +489,11 @@ Deno.serve(async req => {
         if (known.has(item.id)) continue;
         const parsed = parseAuctionPick(item.text!, item.permalink || null);
         if (!parsed) continue;
+        const images = await storeThreadsImages(item);
         rows.push({
           ...parsed,
-          image_url: await storeThreadsImage(item),
+          image_url: images[0] || null,   // 첫 장은 카드 대표 사진
+          source_images: images,          // 나머지는 검토할 때 보는 용도
           source_thread_id: item.id,
           is_published: false,   // 확인 후 사람이 공개합니다.
           is_featured: false,
