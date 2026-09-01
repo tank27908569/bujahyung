@@ -21,6 +21,7 @@ const threadsImportList = document.querySelector('#threads-import-list');
 const publishedList = document.querySelector('#published-list');
 const inquiryList = document.querySelector('#inquiry-list');
 const pickAdminList = document.querySelector('#pick-admin-list');
+const pickStatus = document.querySelector('#pick-import-status');
 const adminMessage = document.querySelector('#admin-message');
 const loginMessage = document.querySelector('#login-message');
 const editModal = document.querySelector('#edit-modal');
@@ -744,8 +745,13 @@ document.querySelector('#pick-form').addEventListener('submit', async event => {
     await api(id ? 'update-auction-recommendation' : 'create-auction-recommendation', id ? { id, changes: item } : item);
     resetPickForm();
     await loadAuctionPicks();
-    message(adminMessage, id ? '추천 물건을 수정했습니다.' : '추천 물건을 저장했습니다.');
-  } catch (error) { message(adminMessage, error.message, true); }
+    const saved = id ? `추천 물건을 수정했습니다.${item.is_published ? ' 공개 상태입니다.' : ' 아직 비공개입니다.'}` : '추천 물건을 저장했습니다.';
+    message(adminMessage, saved);
+    message(pickStatus, saved);
+  } catch (error) {
+    message(pickStatus, `저장하지 못했습니다 — ${error.message}`, true);
+    message(adminMessage, error.message, true);
+  }
 });
 
 pickAdminList.addEventListener('click', async event => {
@@ -783,8 +789,17 @@ pickAdminList.addEventListener('click', async event => {
     } catch (error) { message(adminMessage, error.message, true); }
   }
   if (button.dataset.action === 'toggle-pick') {
-    try { await api('update-auction-recommendation', { id: item.id, changes: { is_published: !item.is_published } }); await loadAuctionPicks(); }
-    catch (error) { message(adminMessage, error.message, true); }
+    try {
+      await api('update-auction-recommendation', { id: item.id, changes: { is_published: !item.is_published } });
+      await loadAuctionPicks();
+      const now = auctionPicks.find(row => row.id === item.id);
+      if (!now) message(pickStatus, '목록에서 사라졌습니다. 새로고침해 확인해 주세요.', true);
+      else if (now.is_published) message(pickStatus, `«${now.title}»을 공개했습니다. 공개 페이지에서 확인해 보세요.`);
+      else message(pickStatus, `«${now.title}»을 비공개로 바꿨습니다.`);
+    } catch (error) {
+      message(pickStatus, `공개 상태를 바꾸지 못했습니다 — ${error.message}`, true);
+      message(adminMessage, error.message, true);
+    }
   }
   if (button.dataset.action === 'delete-pick' && confirm(`「${item.title}」 추천 물건을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.`)) {
     try { await api('delete-auction-recommendation', { id: item.id }); await loadAuctionPicks(); message(adminMessage, '추천 물건을 삭제했습니다.'); }
