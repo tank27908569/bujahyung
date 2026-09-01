@@ -298,17 +298,25 @@ function parseAuctionPick(text: string, permalink: string | null) {
   const property_type = (typeRules.find(([keyword]) => title.includes(keyword)) || [null, "기타"])[1];
 
   // 본문에서 마무리 인사만 걷어냅니다. 글의 순서는 그대로 둡니다.
-  const body = lines.slice(1).filter(line => !/내일 또 좋은 물건|성투하고/.test(line));
+  const body = lines.slice(1).filter(line => !/내일 또 좋은 물건|성투하고/.test(line)).join(" ");
+
+  // 한 문장을 여러 줄에 나눠 쓰시므로 줄이 아니라 문장 단위로 나눕니다.
+  // 마침표가 한글 뒤에 올 때만 문장 끝으로 봅니다. 24.4.19. 7.42억 같은 숫자에서 잘리지 않게.
+  const sentences = body
+    .split(/(?<=[가-힣])\.\s*/)
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => /[.!?…]$/.test(part) ? part : `${part}.`);
 
   // 확인할 점은 글 끝에 이어지는 주의 문장만 떼어냅니다.
   // 중간 문장을 골라내면 번호 목록(1. 2. 3.)이 갈라져 글이 끊깁니다.
   const isRisk = (line: string) => /확인|감안|주의|유의|조심|위험|리스크|판단하면 안|안 돼|살펴야|봐야 해/.test(line);
-  let riskStart = body.length;
-  while (riskStart > 0 && isRisk(body[riskStart - 1])) riskStart -= 1;
-  const useRisk = riskStart > 0 && riskStart < body.length;
+  let riskStart = sentences.length;
+  while (riskStart > 0 && isRisk(sentences[riskStart - 1])) riskStart -= 1;
+  const useRisk = riskStart > 0 && riskStart < sentences.length;
 
-  const reasonLines = useRisk ? body.slice(0, riskStart) : body;
-  const riskLines = useRisk ? body.slice(riskStart) : [];
+  const reasonLines = useRisk ? sentences.slice(0, riskStart) : sentences;
+  const riskLines = useRisk ? sentences.slice(riskStart) : [];
 
   return {
     title,
@@ -514,6 +522,34 @@ Deno.serve(async req => {
       });
     } catch (error) {
       return json(origin, { error: error instanceof Error ? error.message : "스레드에서 물건을 가져오지 못했습니다." }, 502);
+    }
+  }
+  // 이미 가져온 물건의 본문만 원문에서 다시 읽습니다.
+  // 손으로 채우신 소재지·입찰일·사건번호·사진은 건드리지 않습니다.
+  if (action === "reparse-auction-pick") {
+    const token = await threadsToken();
+    if (!token) return json(origin, { error: "Threads 계정 연결이 필요합니다." }, 503);
+    const id = String(payload.id || "");
+    const { data: row, error: rowError } = await db.from("auction_recommendations")
+      .select("id, source_thread_id").eq("id", id).maybeSingle();
+    if (rowError) return json(origin, { error: rowError.message }, 400);
+    if (!row?.source_thread_id) return json(origin, { error: "스레드에서 가져온 물건만 다시 읽을 수 있습니다." }, 400);
+    try {
+      const url = new URL(`${threadsApiBase}/${encodeURIComponent(row.source_thread_id)}`);
+      url.searchParams.set("fields", "id,text,permalink");
+      url.searchParams.set("access_token", token);
+      const post = await threadsFetch(url.toString());
+      const parsed = parseAuctionPick(String(post?.text || ""), post?.permalink || null);
+      if (!parsed) return json(origin, { error: "원문에서 물건 정보를 읽지 못했습니다." }, 400);
+      const { error } = await db.from("auction_recommendations").update({
+        title: parsed.title,
+        recommendation_reason: parsed.recommendation_reason,
+        risk_note: parsed.risk_note,
+      }).eq("id", id);
+      if (error) return json(origin, { error: error.message }, 400);
+      return json(origin, { ok: true, title: parsed.title });
+    } catch (error) {
+      return json(origin, { error: error instanceof Error ? error.message : "원문을 다시 읽지 못했습니다." }, 502);
     }
   }
   if (action === "list-auction-recommendations") {

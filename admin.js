@@ -386,7 +386,7 @@ function renderAuctionPicks() {
     pickAdminList.innerHTML = '<div class="empty-state"><strong>등록한 추천 물건이 없습니다.</strong><span>위 양식에서 첫 물건을 올려 보세요.</span></div>';
     return;
   }
-  pickAdminList.innerHTML = auctionPicks.map(item => `<article class="published-item" data-id="${item.id}"><span>${!item.is_published ? '확인 대기' : item.is_featured ? '대표 추천' : (item.status === 'closed' ? '마감' : '공개 중')}</span><div><small class="category-badge">${[item.property_type, item.case_number].filter(Boolean).map(escapeHtml).join(' · ')}</small><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.address || '소재지 미입력')} · <span class="pick-price">최저 ${pickMoney(item.minimum_price)}</span> · ${pickMissingHint(item)}</p></div><div class="published-actions"><a class="secondary-button" href="auction-picks.html" target="_blank" rel="noopener">보기</a><button class="secondary-button" type="button" data-action="edit-pick">수정</button><button class="secondary-button" type="button" data-action="toggle-pick">${item.is_published ? '비공개' : '공개'}</button><button class="danger-button" type="button" data-action="delete-pick">삭제</button></div></article>`).join('');
+  pickAdminList.innerHTML = auctionPicks.map(item => `<article class="published-item" data-id="${item.id}"><span>${!item.is_published ? '확인 대기' : item.is_featured ? '대표 추천' : (item.status === 'closed' ? '마감' : '공개 중')}</span><div><small class="category-badge">${[item.property_type, item.case_number].filter(Boolean).map(escapeHtml).join(' · ')}</small><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.address || '소재지 미입력')} · <span class="pick-price">최저 ${pickMoney(item.minimum_price)}</span> · ${pickMissingHint(item)}</p></div><div class="published-actions"><a class="secondary-button" href="auction-picks.html" target="_blank" rel="noopener">보기</a><button class="secondary-button" type="button" data-action="edit-pick">수정</button>${item.source_thread_id ? `<button class="secondary-button" type="button" data-action="reparse-pick">본문 다시 읽기</button>` : ''}<button class="secondary-button" type="button" data-action="toggle-pick">${item.is_published ? '비공개' : '공개'}</button><button class="danger-button" type="button" data-action="delete-pick">삭제</button></div></article>`).join('');
 }
 
 async function loadAuctionPicks(preloaded) {
@@ -774,6 +774,13 @@ pickAdminList.addEventListener('click', async event => {
     document.querySelector('#pick-submit-label').textContent = '수정 내용 저장';
     renderPickSourceImages(item);
     document.querySelector('#pick-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  if (button.dataset.action === 'reparse-pick') {
+    try {
+      await api('reparse-auction-pick', { id: item.id }, 60000);
+      await loadAuctionPicks();
+      message(adminMessage, '스레드 원문에서 본문을 다시 읽었습니다. 손으로 채운 소재지·입찰일·사건번호는 그대로입니다.');
+    } catch (error) { message(adminMessage, error.message, true); }
   }
   if (button.dataset.action === 'toggle-pick') {
     try { await api('update-auction-recommendation', { id: item.id, changes: { is_published: !item.is_published } }); await loadAuctionPicks(); }
