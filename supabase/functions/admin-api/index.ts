@@ -457,8 +457,11 @@ Deno.serve(async req => {
     }
   }
   if (action === "list-auction-recommendations") {
+    // 확인 대기(비공개)를 맨 위로 올려 검토할 것부터 보이게 합니다.
     const { data, error } = await db.from("auction_recommendations").select("*")
-      .order("is_featured", { ascending: false }).order("created_at", { ascending: false });
+      .order("is_published", { ascending: true })
+      .order("is_featured", { ascending: false })
+      .order("created_at", { ascending: false });
     return error ? json(origin, { error: error.message }, 400) : json(origin, { items: data });
   }
   if (action === "create-auction-recommendation") {
