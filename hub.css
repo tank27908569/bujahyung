@@ -57,7 +57,7 @@ body:before{
 }
 .avatar img{
   width:100%;height:100%;
-  object-fit:cover;object-position:50% 22%;
+  object-fit:cover;
   border-radius:50%;
   filter:brightness(1.14) contrast(1.04) saturate(1.06);
   border:1px solid var(--line-2);
