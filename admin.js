@@ -350,7 +350,10 @@ async function loadInquiries(preloaded) {
 
 function pickMoney(value) {
   const amount = Number(value || 0);
-  return amount ? `${Math.round(amount / 10000).toLocaleString('ko-KR')}만원` : '가격 미정';
+  if (!amount) return '가격 미정';
+  // 스레드에 쓰시는 표기와 맞춥니다. 8.8억 · 6.16억 · 4,200만원
+  if (amount >= 100000000) return `${Number((amount / 100000000).toFixed(2))}억`;
+  return `${Math.round(amount / 10000).toLocaleString('ko-KR')}만원`;
 }
 
 function renderAuctionPicks() {
