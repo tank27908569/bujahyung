@@ -169,6 +169,41 @@ async function validSession(token: string) {
   } catch { return false; }
 }
 
+function cleanAuctionRecommendation(payload: Record<string, unknown>, partial = false) {
+  const clean: Record<string, unknown> = {};
+  const text = (key: string, max: number, required = false) => {
+    if (partial && !(key in payload)) return;
+    const value = String(payload[key] || "").trim().slice(0, max);
+    if (required && !value) throw new Error(`${key} 항목을 입력해 주세요.`);
+    clean[key] = value || null;
+  };
+  text("title", 200, true); text("case_number", 80, true); text("court", 80);
+  text("property_type", 60, true); text("address", 300, true);
+  text("recommendation_reason", 2000, true); text("risk_note", 2000);
+  text("image_url", 500); text("detail_url", 500);
+  for (const key of ["image_url", "detail_url"]) {
+    if (clean[key] && !/^https?:\/\//i.test(String(clean[key]))) throw new Error("사진과 상세 정보 주소는 http 또는 https 주소여야 합니다.");
+  }
+  for (const key of ["appraisal_price", "minimum_price"]) {
+    if (partial && !(key in payload)) continue;
+    const value = payload[key] === null || payload[key] === "" ? null : Number(payload[key]);
+    if (value !== null && (!Number.isSafeInteger(value) || value < 0)) throw new Error("가격을 원 단위의 올바른 숫자로 입력해 주세요.");
+    clean[key] = value;
+  }
+  if (!partial || "bid_date" in payload) {
+    const value = String(payload.bid_date || "");
+    if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("입찰일 형식이 올바르지 않습니다.");
+    clean.bid_date = value || null;
+  }
+  if (!partial || "status" in payload) {
+    const status = String(payload.status || "open");
+    if (!["open", "closed"].includes(status)) throw new Error("물건 상태가 올바르지 않습니다.");
+    clean.status = status;
+  }
+  for (const key of ["is_featured", "is_published"]) if (!partial || key in payload) clean[key] = payload[key] === true;
+  return clean;
+}
+
 type ThreadsItem = {
   id: string;
   text?: string;
@@ -321,6 +356,32 @@ Deno.serve(async req => {
   if (action === "list") {
     const { data, error } = await db.from("posts").select("*").order("updated_at", { ascending: false });
     return error ? json(origin, { error: error.message }, 400) : json(origin, { posts: data });
+  }
+  if (action === "list-auction-recommendations") {
+    const { data, error } = await db.from("auction_recommendations").select("*")
+      .order("is_featured", { ascending: false }).order("created_at", { ascending: false });
+    return error ? json(origin, { error: error.message }, 400) : json(origin, { items: data });
+  }
+  if (action === "create-auction-recommendation") {
+    try {
+      const clean = cleanAuctionRecommendation(payload);
+      const { data, error } = await db.from("auction_recommendations").insert(clean).select("*").single();
+      return error ? json(origin, { error: error.message }, 400) : json(origin, { ok: true, item: data });
+    } catch (error) { return json(origin, { error: error instanceof Error ? error.message : "추천 물건을 저장하지 못했습니다." }, 400); }
+  }
+  if (action === "update-auction-recommendation") {
+    try {
+      const id = String(payload.id || "");
+      if (!id) return json(origin, { error: "수정할 추천 물건을 찾지 못했습니다." }, 400);
+      const changes = cleanAuctionRecommendation((payload.changes || {}) as Record<string, unknown>, true);
+      if (!Object.keys(changes).length) return json(origin, { error: "수정할 내용을 입력해 주세요." }, 400);
+      const { error } = await db.from("auction_recommendations").update(changes).eq("id", id);
+      return error ? json(origin, { error: error.message }, 400) : json(origin, { ok: true });
+    } catch (error) { return json(origin, { error: error instanceof Error ? error.message : "추천 물건을 수정하지 못했습니다." }, 400); }
+  }
+  if (action === "delete-auction-recommendation") {
+    const { error } = await db.from("auction_recommendations").delete().eq("id", String(payload.id || ""));
+    return error ? json(origin, { error: error.message }, 400) : json(origin, { ok: true });
   }
   if (action === "threads-integration-status") {
     const { data, error } = await db.from("threads_integration")

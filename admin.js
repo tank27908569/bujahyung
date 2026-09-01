@@ -20,6 +20,7 @@ const adminApp = document.querySelector('#admin-app');
 const threadsImportList = document.querySelector('#threads-import-list');
 const publishedList = document.querySelector('#published-list');
 const inquiryList = document.querySelector('#inquiry-list');
+const pickAdminList = document.querySelector('#pick-admin-list');
 const adminMessage = document.querySelector('#admin-message');
 const loginMessage = document.querySelector('#login-message');
 const editModal = document.querySelector('#edit-modal');
@@ -28,6 +29,7 @@ let adminSession = sessionStorage.getItem(sessionKey) || '';
 let threadsImports = [];
 let posts = [];
 let inquiries = [];
+let auctionPicks = [];
 let selectedThreads = new Set();
 let threadsIntegration = null;
 let threadsPlans = new Map();
@@ -346,8 +348,26 @@ async function loadInquiries(preloaded) {
   renderInquiries();
 }
 
+function pickMoney(value) {
+  const amount = Number(value || 0);
+  return amount ? `${Math.round(amount / 10000).toLocaleString('ko-KR')}만원` : '가격 미정';
+}
+
+function renderAuctionPicks() {
+  if (!auctionPicks.length) {
+    pickAdminList.innerHTML = '<div class="empty-state"><strong>등록한 추천 물건이 없습니다.</strong><span>위 양식에서 첫 물건을 올려 보세요.</span></div>';
+    return;
+  }
+  pickAdminList.innerHTML = auctionPicks.map(item => `<article class="published-item" data-id="${item.id}"><span>${item.is_featured ? '대표 추천' : (item.status === 'closed' ? '마감' : '추천')}</span><div><small class="category-badge">${escapeHtml(item.property_type)} · ${escapeHtml(item.case_number)}</small><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.address)} · <span class="pick-price">최저 ${pickMoney(item.minimum_price)}</span> · ${item.is_published ? '공개 중' : '비공개'}</p></div><div class="published-actions"><a class="secondary-button" href="auction-picks.html" target="_blank" rel="noopener">보기</a><button class="secondary-button" type="button" data-action="edit-pick">수정</button><button class="secondary-button" type="button" data-action="toggle-pick">${item.is_published ? '비공개' : '공개'}</button><button class="danger-button" type="button" data-action="delete-pick">삭제</button></div></article>`).join('');
+}
+
+async function loadAuctionPicks(preloaded) {
+  auctionPicks = preloaded || (await api('list-auction-recommendations')).items || [];
+  renderAuctionPicks();
+}
+
 async function showAdmin(preloaded) {
-  await Promise.all([loadPosts(preloaded), loadThreadsImports(), loadThreadsIntegration(), loadInquiries()]);
+  await Promise.all([loadPosts(preloaded), loadThreadsImports(), loadThreadsIntegration(), loadInquiries(), loadAuctionPicks()]);
   loginPanel.style.display = 'none';
   adminApp.classList.add('active');
   document.querySelector('#logout-button').hidden = false;
@@ -631,6 +651,84 @@ function closeEdit() { editModal.classList.remove('open'); }
 editModal.querySelector('.modal-close').addEventListener('click', closeEdit);
 document.querySelector('#edit-cancel').addEventListener('click', closeEdit);
 editModal.addEventListener('click', event => { if (event.target === editModal) closeEdit(); });
+
+function resetPickForm() {
+  document.querySelector('#pick-form').reset();
+  document.querySelector('#pick-id').value = '';
+  document.querySelector('#pick-published').checked = true;
+  document.querySelector('#pick-submit-label').textContent = '추천 물건 저장';
+  document.querySelector('#pick-upload-status').textContent = 'JPG·PNG·WEBP·GIF, 최대 8MB';
+}
+
+document.querySelector('#pick-reset').addEventListener('click', resetPickForm);
+document.querySelector('#pick-image-file').addEventListener('change', async event => {
+  const urls = await uploadSelectedImages(event.target, document.querySelector('#pick-upload-status'));
+  if (urls[0]) document.querySelector('#pick-image-url').value = urls[0];
+});
+
+document.querySelector('#pick-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const id = document.querySelector('#pick-id').value;
+  const item = {
+    title: document.querySelector('#pick-title').value.trim(),
+    case_number: document.querySelector('#pick-case-number').value.trim(),
+    court: document.querySelector('#pick-court').value.trim(),
+    property_type: document.querySelector('#pick-property-type').value,
+    address: document.querySelector('#pick-address').value.trim(),
+    appraisal_price: document.querySelector('#pick-appraisal-price').value || null,
+    minimum_price: document.querySelector('#pick-minimum-price').value || null,
+    bid_date: document.querySelector('#pick-bid-date').value || null,
+    detail_url: document.querySelector('#pick-detail-url').value.trim(),
+    recommendation_reason: document.querySelector('#pick-reason').value.trim(),
+    risk_note: document.querySelector('#pick-risk').value.trim(),
+    image_url: document.querySelector('#pick-image-url').value.trim(),
+    is_featured: document.querySelector('#pick-featured').checked,
+    is_published: document.querySelector('#pick-published').checked,
+    status: document.querySelector('#pick-closed').checked ? 'closed' : 'open'
+  };
+  try {
+    await api(id ? 'update-auction-recommendation' : 'create-auction-recommendation', id ? { id, changes: item } : item);
+    resetPickForm();
+    await loadAuctionPicks();
+    message(adminMessage, id ? '추천 물건을 수정했습니다.' : '추천 물건을 저장했습니다.');
+  } catch (error) { message(adminMessage, error.message, true); }
+});
+
+pickAdminList.addEventListener('click', async event => {
+  const button = event.target.closest('button[data-action]');
+  const row = event.target.closest('.published-item');
+  if (!button || !row) return;
+  const item = auctionPicks.find(entry => entry.id === row.dataset.id);
+  if (!item) return;
+  if (button.dataset.action === 'edit-pick') {
+    document.querySelector('#pick-id').value = item.id;
+    document.querySelector('#pick-title').value = item.title || '';
+    document.querySelector('#pick-case-number').value = item.case_number || '';
+    document.querySelector('#pick-court').value = item.court || '';
+    document.querySelector('#pick-property-type').value = item.property_type || '기타';
+    document.querySelector('#pick-address').value = item.address || '';
+    document.querySelector('#pick-appraisal-price').value = item.appraisal_price || '';
+    document.querySelector('#pick-minimum-price').value = item.minimum_price || '';
+    document.querySelector('#pick-bid-date').value = item.bid_date || '';
+    document.querySelector('#pick-detail-url').value = item.detail_url || '';
+    document.querySelector('#pick-reason').value = item.recommendation_reason || '';
+    document.querySelector('#pick-risk').value = item.risk_note || '';
+    document.querySelector('#pick-image-url').value = item.image_url || '';
+    document.querySelector('#pick-featured').checked = Boolean(item.is_featured);
+    document.querySelector('#pick-published').checked = Boolean(item.is_published);
+    document.querySelector('#pick-closed').checked = item.status === 'closed';
+    document.querySelector('#pick-submit-label').textContent = '수정 내용 저장';
+    document.querySelector('#pick-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  if (button.dataset.action === 'toggle-pick') {
+    try { await api('update-auction-recommendation', { id: item.id, changes: { is_published: !item.is_published } }); await loadAuctionPicks(); }
+    catch (error) { message(adminMessage, error.message, true); }
+  }
+  if (button.dataset.action === 'delete-pick' && confirm(`「${item.title}」 추천 물건을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.`)) {
+    try { await api('delete-auction-recommendation', { id: item.id }); await loadAuctionPicks(); message(adminMessage, '추천 물건을 삭제했습니다.'); }
+    catch (error) { message(adminMessage, error.message, true); }
+  }
+});
 
 if (!isConfigured) message(loginMessage, 'Supabase 프로젝트 연결이 필요합니다.', true);
 else if (adminSession) showAdmin().catch(() => {
