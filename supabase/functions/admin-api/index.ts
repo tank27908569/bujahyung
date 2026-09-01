@@ -177,7 +177,7 @@ function cleanAuctionRecommendation(payload: Record<string, unknown>, partial = 
     if (required && !value) throw new Error(`${key} 항목을 입력해 주세요.`);
     clean[key] = value || null;
   };
-  text("title", 200, true); text("case_number", 80, true); text("court", 80);
+  text("title", 200, true); text("case_number", 80); text("court", 80);
   text("property_type", 60, true); text("address", 300, true);
   text("recommendation_reason", 2000, true); text("risk_note", 2000);
   text("image_url", 500); text("detail_url", 500);

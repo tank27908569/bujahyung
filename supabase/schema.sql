@@ -110,7 +110,7 @@ create unique index if not exists posts_category_source_no_key on public.posts (
 create index if not exists posts_category_published_at_idx on public.posts (category, published_at desc);
 
 create table if not exists public.auction_recommendations (
-  id uuid primary key default gen_random_uuid(), title text not null, case_number text not null,
+  id uuid primary key default gen_random_uuid(), title text not null, case_number text,
   court text, property_type text not null default '기타', address text not null,
   appraisal_price bigint, minimum_price bigint, bid_date date,
   recommendation_reason text not null, risk_note text, image_url text, detail_url text,
