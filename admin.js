@@ -356,12 +356,22 @@ function pickMoney(value) {
   return `${Math.round(amount / 10000).toLocaleString('ko-KR')}만원`;
 }
 
+// 스레드 글에는 소재지·입찰일·사건번호가 없습니다. 검토할 때 무엇을 채워야 하는지 알려줍니다.
+function pickMissingHint(item) {
+  const missing = [];
+  if (!item.address) missing.push('소재지');
+  if (!item.bid_date) missing.push('입찰일');
+  if (!item.case_number) missing.push('사건번호');
+  if (!missing.length) return item.is_published ? '공개 중' : '비공개';
+  return `<b class="pick-missing">채울 것 · ${missing.join(' · ')}</b>`;
+}
+
 function renderAuctionPicks() {
   if (!auctionPicks.length) {
     pickAdminList.innerHTML = '<div class="empty-state"><strong>등록한 추천 물건이 없습니다.</strong><span>위 양식에서 첫 물건을 올려 보세요.</span></div>';
     return;
   }
-  pickAdminList.innerHTML = auctionPicks.map(item => `<article class="published-item" data-id="${item.id}"><span>${!item.is_published ? '확인 대기' : item.is_featured ? '대표 추천' : (item.status === 'closed' ? '마감' : '공개 중')}</span><div><small class="category-badge">${[item.property_type, item.case_number].filter(Boolean).map(escapeHtml).join(' · ')}</small><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.address || '소재지 미입력')} · <span class="pick-price">최저 ${pickMoney(item.minimum_price)}</span> · ${item.is_published ? '공개 중' : '비공개'}</p></div><div class="published-actions"><a class="secondary-button" href="auction-picks.html" target="_blank" rel="noopener">보기</a><button class="secondary-button" type="button" data-action="edit-pick">수정</button><button class="secondary-button" type="button" data-action="toggle-pick">${item.is_published ? '비공개' : '공개'}</button><button class="danger-button" type="button" data-action="delete-pick">삭제</button></div></article>`).join('');
+  pickAdminList.innerHTML = auctionPicks.map(item => `<article class="published-item" data-id="${item.id}"><span>${!item.is_published ? '확인 대기' : item.is_featured ? '대표 추천' : (item.status === 'closed' ? '마감' : '공개 중')}</span><div><small class="category-badge">${[item.property_type, item.case_number].filter(Boolean).map(escapeHtml).join(' · ')}</small><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.address || '소재지 미입력')} · <span class="pick-price">최저 ${pickMoney(item.minimum_price)}</span> · ${pickMissingHint(item)} ${item.is_published ? '공개 중' : '비공개'}</p></div><div class="published-actions"><a class="secondary-button" href="auction-picks.html" target="_blank" rel="noopener">보기</a><button class="secondary-button" type="button" data-action="edit-pick">수정</button><button class="secondary-button" type="button" data-action="toggle-pick">${item.is_published ? '비공개' : '공개'}</button><button class="danger-button" type="button" data-action="delete-pick">삭제</button></div></article>`).join('');
 }
 
 async function loadAuctionPicks(preloaded) {

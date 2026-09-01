@@ -212,6 +212,10 @@ type ThreadsItem = {
   is_reply?: boolean;
   is_reply_owned_by_me?: boolean;
   replied_to?: { id?: string };
+  media_type?: string;
+  media_url?: string;
+  thumbnail_url?: string;
+  children?: { data?: { media_type?: string; media_url?: string; thumbnail_url?: string }[] };
 };
 
 // 한 번의 호출에서 가져올 양을 제한합니다. 원문 목록은 커서로 나눠 받고,
@@ -293,9 +297,18 @@ function parseAuctionPick(text: string, permalink: string | null) {
   ];
   const property_type = (typeRules.find(([keyword]) => title.includes(keyword)) || [null, "기타"])[1];
 
-  const riskLines = lines.filter(line => /층이야|층이라는|임차인|권리관계|감안|주의|확인/.test(line));
-  const reasonLines = lines.slice(1).filter(line =>
-    !/내일 또 좋은 물건|성투하고/.test(line) && !riskLines.includes(line));
+  // 본문에서 마무리 인사만 걷어냅니다. 글의 순서는 그대로 둡니다.
+  const body = lines.slice(1).filter(line => !/내일 또 좋은 물건|성투하고/.test(line));
+
+  // 확인할 점은 글 끝에 이어지는 주의 문장만 떼어냅니다.
+  // 중간 문장을 골라내면 번호 목록(1. 2. 3.)이 갈라져 글이 끊깁니다.
+  const isRisk = (line: string) => /확인|감안|주의|유의|조심|위험|리스크|판단하면 안|안 돼|살펴야|봐야 해/.test(line);
+  let riskStart = body.length;
+  while (riskStart > 0 && isRisk(body[riskStart - 1])) riskStart -= 1;
+  const useRisk = riskStart > 0 && riskStart < body.length;
+
+  const reasonLines = useRisk ? body.slice(0, riskStart) : body;
+  const riskLines = useRisk ? body.slice(riskStart) : [];
 
   return {
     title,
@@ -306,6 +319,32 @@ function parseAuctionPick(text: string, permalink: string | null) {
     risk_note: riskLines.join(" ").slice(0, 2000) || null,
     detail_url: permalink,
   };
+}
+
+// 스레드 CDN 주소는 시간이 지나면 만료되므로 파일을 받아 우리 저장소에 옮깁니다.
+async function storeThreadsImage(item: ThreadsItem) {
+  const source = item.media_type === "IMAGE"
+    ? item.media_url
+    : item.media_type === "CAROUSEL_ALBUM"
+      ? (item.children?.data || []).find(child => child.media_type === "IMAGE")?.media_url
+      : item.thumbnail_url;
+  if (!source) return null;
+  try {
+    const response = await fetch(source, { signal: AbortSignal.timeout(threadsRequestTimeoutMs) });
+    if (!response.ok) return null;
+    const mime = (response.headers.get("content-type") || "image/jpeg").split(";")[0].toLowerCase();
+    const extensions: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" };
+    if (!extensions[mime]) return null;
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (!bytes.length || bytes.length > 8 * 1024 * 1024) return null;
+    const now = new Date();
+    const path = `${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, "0")}/${crypto.randomUUID()}.${extensions[mime]}`;
+    const { error } = await db.storage.from("post-images").upload(path, bytes, { contentType: mime, upsert: false, cacheControl: "31536000" });
+    if (error) return null;
+    return db.storage.from("post-images").getPublicUrl(path).data.publicUrl;
+  } catch {
+    return null;   // 사진을 못 가져와도 물건 정보는 들어가게 둡니다.
+  }
 }
 
 function continuationReplies(rootId: string, conversation: ThreadsItem[]) {
@@ -414,7 +453,7 @@ Deno.serve(async req => {
     if (!token) return json(origin, { error: "Threads 계정 연결이 필요합니다." }, 503);
     try {
       const { items } = await threadsPage(
-        "/me/threads?fields=id,text,timestamp,permalink,is_reply&limit=50",
+        "/me/threads?fields=id,text,timestamp,permalink,is_reply,media_type,media_url,thumbnail_url,children{media_type,media_url,thumbnail_url}&limit=50",
         token,
         2,
       );
@@ -434,6 +473,7 @@ Deno.serve(async req => {
         if (!parsed) continue;
         rows.push({
           ...parsed,
+          image_url: await storeThreadsImage(item),
           source_thread_id: item.id,
           is_published: false,   // 확인 후 사람이 공개합니다.
           is_featured: false,
