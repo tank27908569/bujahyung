@@ -178,7 +178,7 @@ function cleanAuctionRecommendation(payload: Record<string, unknown>, partial = 
     clean[key] = value || null;
   };
   text("title", 200, true); text("case_number", 80); text("court", 80);
-  text("property_type", 60, true); text("address", 300, true);
+  text("property_type", 60, true); text("address", 300);
   text("recommendation_reason", 2000, true); text("risk_note", 2000);
   text("image_url", 500); text("detail_url", 500);
   for (const key of ["image_url", "detail_url"]) {
@@ -256,6 +256,56 @@ function threadsTimestamp(value?: string) {
 
 function threadsCombinedBody(rootText: string, replies: { text?: string }[]) {
   return [rootText, ...replies.map(reply => String(reply?.text || ""))].filter(Boolean).join("\n\n").slice(0, 30000);
+}
+
+// ---- 스레드 물건 브리핑 읽기 ----
+// 물건 글에만 함께 나오는 표현으로 가려냅니다. 시나 일상 글은 걸리지 않습니다.
+function looksLikeAuctionPick(text: string) {
+  const value = String(text || "");
+  const listed = /경매(로)?\s*나왔|경매에\s*나왔/.test(value);
+  const appraised = /감정가/.test(value);
+  const signoff = /성투하고|좋은 물건 올려줄게/.test(value);
+  return (listed && appraised) || (appraised && signoff);
+}
+
+function parseEokAmount(raw: string | undefined) {
+  if (!raw) return null;
+  const matched = raw.match(/(\d+(?:\.\d+)?)\s*억/);
+  return matched ? Math.round(parseFloat(matched[1]) * 100000000) : null;
+}
+
+function parseAuctionPick(text: string, permalink: string | null) {
+  const lines = String(text || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  if (!lines.length) return null;
+
+  const listingLine = lines.find(line => /경매(로)?\s*나왔|경매에\s*나왔/.test(line));
+  const appraisalIndex = lines.findIndex(line => /감정가/.test(line));
+  const minimum_price = parseEokAmount(listingLine);
+  const appraisal_price = appraisalIndex >= 0
+    ? parseEokAmount(`${lines[appraisalIndex]} ${lines[appraisalIndex + 1] || ""}`)
+    : null;
+  if (!minimum_price && !appraisal_price) return null;
+
+  const title = lines[0].slice(0, 200);
+  const typeRules: [string, string][] = [
+    ["아파트", "아파트"], ["오피스텔", "오피스텔"], ["빌라", "빌라·다세대"], ["다세대", "빌라·다세대"],
+    ["다가구", "빌라·다세대"], ["상가", "상가"], ["토지", "토지"], ["공장", "공장·창고"], ["창고", "공장·창고"],
+  ];
+  const property_type = (typeRules.find(([keyword]) => title.includes(keyword)) || [null, "기타"])[1];
+
+  const riskLines = lines.filter(line => /층이야|층이라는|임차인|권리관계|감안|주의|확인/.test(line));
+  const reasonLines = lines.slice(1).filter(line =>
+    !/내일 또 좋은 물건|성투하고/.test(line) && !riskLines.includes(line));
+
+  return {
+    title,
+    property_type,
+    minimum_price,
+    appraisal_price,
+    recommendation_reason: reasonLines.join(" ").slice(0, 2000) || title,
+    risk_note: riskLines.join(" ").slice(0, 2000) || null,
+    detail_url: permalink,
+  };
 }
 
 function continuationReplies(rootId: string, conversation: ThreadsItem[]) {
@@ -356,6 +406,55 @@ Deno.serve(async req => {
   if (action === "list") {
     const { data, error } = await db.from("posts").select("*").order("updated_at", { ascending: false });
     return error ? json(origin, { error: error.message }, 400) : json(origin, { posts: data });
+  }
+  // 스레드에 올린 물건 브리핑을 그대로 가져와 비공개 초안으로 만듭니다.
+  // 숫자가 잘못 읽혔을 수 있으므로 공개 전환은 사람이 확인하고 누릅니다.
+  if (action === "import-threads-picks") {
+    const token = await threadsToken();
+    if (!token) return json(origin, { error: "Threads 계정 연결이 필요합니다." }, 503);
+    try {
+      const { items } = await threadsPage(
+        "/me/threads?fields=id,text,timestamp,permalink,is_reply&limit=50",
+        token,
+        2,
+      );
+      const candidates = items
+        .filter(item => item.id && item.text && !item.is_reply && looksLikeAuctionPick(item.text!));
+      if (!candidates.length) return json(origin, { ok: true, found: 0, imported: 0, skipped: 0, drafts: [] });
+
+      const { data: existing, error: existingError } = await db.from("auction_recommendations")
+        .select("source_thread_id").in("source_thread_id", candidates.map(item => item.id));
+      if (existingError) return json(origin, { error: existingError.message }, 400);
+      const known = new Set((existing || []).map(row => row.source_thread_id));
+
+      const rows = [];
+      for (const item of candidates) {
+        if (known.has(item.id)) continue;
+        const parsed = parseAuctionPick(item.text!, item.permalink || null);
+        if (!parsed) continue;
+        rows.push({
+          ...parsed,
+          source_thread_id: item.id,
+          is_published: false,   // 확인 후 사람이 공개합니다.
+          is_featured: false,
+          status: "open",
+        });
+      }
+      if (!rows.length) {
+        return json(origin, { ok: true, found: candidates.length, imported: 0, skipped: candidates.length, drafts: [] });
+      }
+      const { data: inserted, error } = await db.from("auction_recommendations").insert(rows).select("id, title");
+      if (error) return json(origin, { error: error.message }, 400);
+      return json(origin, {
+        ok: true,
+        found: candidates.length,
+        imported: inserted?.length || 0,
+        skipped: candidates.length - rows.length,
+        drafts: inserted || [],
+      });
+    } catch (error) {
+      return json(origin, { error: error instanceof Error ? error.message : "스레드에서 물건을 가져오지 못했습니다." }, 502);
+    }
   }
   if (action === "list-auction-recommendations") {
     const { data, error } = await db.from("auction_recommendations").select("*")

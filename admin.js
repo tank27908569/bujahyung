@@ -361,7 +361,7 @@ function renderAuctionPicks() {
     pickAdminList.innerHTML = '<div class="empty-state"><strong>등록한 추천 물건이 없습니다.</strong><span>위 양식에서 첫 물건을 올려 보세요.</span></div>';
     return;
   }
-  pickAdminList.innerHTML = auctionPicks.map(item => `<article class="published-item" data-id="${item.id}"><span>${item.is_featured ? '대표 추천' : (item.status === 'closed' ? '마감' : '추천')}</span><div><small class="category-badge">${[item.property_type, item.case_number].filter(Boolean).map(escapeHtml).join(' · ')}</small><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.address)} · <span class="pick-price">최저 ${pickMoney(item.minimum_price)}</span> · ${item.is_published ? '공개 중' : '비공개'}</p></div><div class="published-actions"><a class="secondary-button" href="auction-picks.html" target="_blank" rel="noopener">보기</a><button class="secondary-button" type="button" data-action="edit-pick">수정</button><button class="secondary-button" type="button" data-action="toggle-pick">${item.is_published ? '비공개' : '공개'}</button><button class="danger-button" type="button" data-action="delete-pick">삭제</button></div></article>`).join('');
+  pickAdminList.innerHTML = auctionPicks.map(item => `<article class="published-item" data-id="${item.id}"><span>${item.is_featured ? '대표 추천' : (item.status === 'closed' ? '마감' : '추천')}</span><div><small class="category-badge">${[item.property_type, item.case_number].filter(Boolean).map(escapeHtml).join(' · ')}</small><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.address || '소재지 미입력')} · <span class="pick-price">최저 ${pickMoney(item.minimum_price)}</span> · ${item.is_published ? '공개 중' : '비공개'}</p></div><div class="published-actions"><a class="secondary-button" href="auction-picks.html" target="_blank" rel="noopener">보기</a><button class="secondary-button" type="button" data-action="edit-pick">수정</button><button class="secondary-button" type="button" data-action="toggle-pick">${item.is_published ? '비공개' : '공개'}</button><button class="danger-button" type="button" data-action="delete-pick">삭제</button></div></article>`).join('');
 }
 
 async function loadAuctionPicks(preloaded) {
@@ -662,6 +662,31 @@ function resetPickForm() {
   document.querySelector('#pick-submit-label').textContent = '추천 물건 저장';
   document.querySelector('#pick-upload-status').textContent = 'JPG·PNG·WEBP·GIF, 최대 8MB';
 }
+
+// 스레드에 올린 물건 브리핑을 비공개 초안으로 받아옵니다. 숫자를 확인하고 공개로 바꾸시면 됩니다.
+document.querySelector('#import-threads-picks').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  const status = document.querySelector('#pick-import-status');
+  button.disabled = true;
+  button.textContent = '스레드에서 가져오는 중…';
+  message(status, '최근 스레드 글에서 물건 브리핑을 찾고 있습니다…');
+  try {
+    const result = await api('import-threads-picks', {}, 90000);
+    await loadAuctionPicks();
+    if (!result.found) {
+      message(status, '최근 글에서 물건 브리핑을 찾지 못했습니다.', true);
+    } else if (!result.imported) {
+      message(status, `물건 글 ${result.found}건을 찾았지만 모두 이미 가져온 것입니다.`);
+    } else {
+      message(status, `${result.imported}건을 비공개로 가져왔습니다. 숫자를 확인하고 «공개»를 눌러 주세요. (이미 가져온 ${result.skipped}건은 건너뜀)`);
+    }
+  } catch (error) {
+    message(status, `가져오지 못했습니다 — ${error.message}`, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = '스레드에서 물건 가져오기';
+  }
+});
 
 document.querySelector('#pick-reset').addEventListener('click', resetPickForm);
 document.querySelector('#pick-image-file').addEventListener('change', async event => {
