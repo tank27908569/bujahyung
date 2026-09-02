@@ -358,24 +358,39 @@ async function storeOneImage(source: string) {
 // 소재지·기일·사건번호는 보통 뒤쪽 명세 사진에 적혀 있습니다.
 const threadsImagesPerPick = 6;
 
-async function storeThreadsImages(item: ThreadsItem) {
+async function storeThreadsImages(item: ThreadsItem, token?: string) {
   const sources: string[] = [];
-  if (item.media_type === "CAROUSEL_ALBUM") {
-    for (const child of item.children?.data || []) {
+  const pushChildren = (children: { media_type?: string; media_url?: string; thumbnail_url?: string }[]) => {
+    for (const child of children) {
       const url = child.media_type === "VIDEO" ? child.thumbnail_url : child.media_url;
       if (url) sources.push(url);
     }
-  } else if (item.media_type === "IMAGE" && item.media_url) {
-    sources.push(item.media_url);
-  } else if (item.thumbnail_url) {
-    sources.push(item.thumbnail_url);
+  };
+
+  if (item.media_type === "CAROUSEL_ALBUM") {
+    pushChildren(item.children?.data || []);
+    // 앨범인데 children이 같이 안 오는 경우가 있어 한 번 더 물어봅니다.
+    if (!sources.length && token) {
+      try {
+        const url = new URL(`${threadsApiBase}/${encodeURIComponent(item.id)}/children`);
+        url.searchParams.set("fields", "media_type,media_url,thumbnail_url");
+        url.searchParams.set("access_token", token);
+        const result = await threadsFetch(url.toString());
+        pushChildren(Array.isArray(result?.data) ? result.data : []);
+      } catch {
+        /* 사진을 못 가져와도 물건 정보는 남깁니다. */
+      }
+    }
   }
+  if (!sources.length && item.media_url) sources.push(item.media_url);
+  if (!sources.length && item.thumbnail_url) sources.push(item.thumbnail_url);
+
   const stored: string[] = [];
   for (const source of sources.slice(0, threadsImagesPerPick)) {
     const url = await storeOneImage(source);
     if (url) stored.push(url);
   }
-  return stored;
+  return { stored, found: sources.length };
 }
 
 function continuationReplies(rootId: string, conversation: ThreadsItem[]) {
@@ -502,7 +517,7 @@ Deno.serve(async req => {
         if (known.has(item.id)) continue;
         const parsed = parseAuctionPick(item.text!, item.permalink || null);
         if (!parsed) continue;
-        const images = await storeThreadsImages(item);
+        const { stored: images } = await storeThreadsImages(item, token);
         rows.push({
           ...parsed,
           image_url: images[0] || null,   // 첫 장은 카드 대표 사진
@@ -563,16 +578,23 @@ Deno.serve(async req => {
       // 사진이 비어 있는 물건만 채웁니다. 직접 올리신 사진은 덮어쓰지 않습니다.
       const hasImages = Boolean(row.image_url) && Array.isArray(row.source_images) && row.source_images.length > 0;
       let addedImages = 0;
+      let reason: string | null = null;
       if (!hasImages) {
-        const images = await storeThreadsImages(post as ThreadsItem);
-        if (images.length) {
-          changes.source_images = images;
-          if (!row.image_url) changes.image_url = images[0];
-          addedImages = images.length;
+        const { stored, found } = await storeThreadsImages(post as ThreadsItem, token);
+        if (stored.length) {
+          changes.source_images = stored;
+          if (!row.image_url) changes.image_url = stored[0];
+          addedImages = stored.length;
+        } else if (!found) {
+          reason = `원문(${post?.media_type || "형식 불명"})에 가져올 사진이 없습니다.`;
+        } else {
+          reason = `사진 ${found}장을 찾았지만 내려받지 못했습니다.`;
         }
       }
 
-      if (!Object.keys(changes).length) return json(origin, { ok: true, title: parsed?.title || null, images: 0 });
+      if (!Object.keys(changes).length) {
+        return json(origin, { ok: true, title: parsed?.title || null, images: 0, reason });
+      }
       const { error } = await db.from("auction_recommendations").update(changes).eq("id", id);
       if (error) return json(origin, { error: error.message }, 400);
       return json(origin, { ok: true, title: parsed?.title || null, images: addedImages });

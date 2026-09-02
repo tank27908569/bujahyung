@@ -732,12 +732,13 @@ document.querySelector('#backfill-pick-images').addEventListener('click', async 
       try {
         const result = await api('reparse-auction-pick', { id: targets[index].id, images_only: true }, 90000);
         if (result.images) { filled += 1; images += result.images; }
+        else failed.push(`${targets[index].title}(${result.reason || '사진 없음'})`);
       } catch (error) {
-        failed.push(targets[index].title);
+        failed.push(`${targets[index].title}(${error.message})`);
       }
     }
     await loadAuctionPicks();
-    const tail = failed.length ? ` 가져오지 못한 물건: ${failed.join(', ')}` : '';
+    const tail = failed.length ? ` 못 가져온 물건 — ${failed.join(' / ')}` : '';
     message(pickStatus, `물건 ${filled}건에 사진 ${images}장을 채웠습니다.${tail}`, failed.length > 0);
   } finally {
     button.disabled = false;
