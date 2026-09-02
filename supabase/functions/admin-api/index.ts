@@ -266,10 +266,10 @@ function threadsCombinedBody(rootText: string, replies: { text?: string }[]) {
 // 물건 글에만 함께 나오는 표현으로 가려냅니다. 시나 일상 글은 걸리지 않습니다.
 function looksLikeAuctionPick(text: string) {
   const value = String(text || "");
-  const listed = /경매(로)?\s*나왔|경매에\s*나왔/.test(value);
-  const appraised = /감정가/.test(value);
-  const signoff = /성투하고|좋은 물건 올려줄게/.test(value);
-  return (listed && appraised) || (appraised && signoff);
+  // 감정가를 안 적고 올리시는 글도 있어서, 물건 표지 하나와 억 단위 금액이면 물건 글로 봅니다.
+  const marker = /경매(로|에)?\s*나왔|감정가|최저가|경매가는/.test(value);
+  const price = /\d+(?:\.\d+)?\s*억/.test(value);
+  return marker && price;
 }
 
 function parseEokAmount(raw: string | undefined) {
@@ -282,7 +282,9 @@ function parseAuctionPick(text: string, permalink: string | null) {
   const lines = String(text || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   if (!lines.length) return null;
 
-  const listingLine = lines.find(line => /경매(로)?\s*나왔|경매에\s*나왔/.test(line));
+  // 최저가는 "5.29억에 경매 나왔어" 형태가 기본이고, "경매가는 5.29억" "최저가 …"도 받습니다.
+  const listingLine = lines.find(line => /경매(로|에)?\s*나왔/.test(line))
+    || lines.find(line => /경매가는|최저가/.test(line));
   const appraisalIndex = lines.findIndex(line => /감정가/.test(line));
   const minimum_price = parseEokAmount(listingLine);
   const appraisal_price = appraisalIndex >= 0
