@@ -533,23 +533,41 @@ Deno.serve(async req => {
     if (!token) return json(origin, { error: "Threads 계정 연결이 필요합니다." }, 503);
     const id = String(payload.id || "");
     const { data: row, error: rowError } = await db.from("auction_recommendations")
-      .select("id, source_thread_id").eq("id", id).maybeSingle();
+      .select("id, source_thread_id, image_url, source_images").eq("id", id).maybeSingle();
     if (rowError) return json(origin, { error: rowError.message }, 400);
     if (!row?.source_thread_id) return json(origin, { error: "스레드에서 가져온 물건만 다시 읽을 수 있습니다." }, 400);
     try {
       const url = new URL(`${threadsApiBase}/${encodeURIComponent(row.source_thread_id)}`);
-      url.searchParams.set("fields", "id,text,permalink");
+      url.searchParams.set(
+        "fields",
+        "id,text,permalink,media_type,media_url,thumbnail_url,children{media_type,media_url,thumbnail_url}",
+      );
       url.searchParams.set("access_token", token);
       const post = await threadsFetch(url.toString());
       const parsed = parseAuctionPick(String(post?.text || ""), post?.permalink || null);
       if (!parsed) return json(origin, { error: "원문에서 물건 정보를 읽지 못했습니다." }, 400);
-      const { error } = await db.from("auction_recommendations").update({
+
+      const changes: Record<string, unknown> = {
         title: parsed.title,
         recommendation_reason: parsed.recommendation_reason,
         risk_note: parsed.risk_note,
-      }).eq("id", id);
+      };
+
+      // 사진이 비어 있는 물건만 채웁니다. 직접 올리신 사진은 덮어쓰지 않습니다.
+      const hasImages = Boolean(row.image_url) && Array.isArray(row.source_images) && row.source_images.length > 0;
+      let addedImages = 0;
+      if (!hasImages) {
+        const images = await storeThreadsImages(post as ThreadsItem);
+        if (images.length) {
+          changes.source_images = images;
+          if (!row.image_url) changes.image_url = images[0];
+          addedImages = images.length;
+        }
+      }
+
+      const { error } = await db.from("auction_recommendations").update(changes).eq("id", id);
       if (error) return json(origin, { error: error.message }, 400);
-      return json(origin, { ok: true, title: parsed.title });
+      return json(origin, { ok: true, title: parsed.title, images: addedImages });
     } catch (error) {
       return json(origin, { error: error instanceof Error ? error.message : "원문을 다시 읽지 못했습니다." }, 502);
     }
