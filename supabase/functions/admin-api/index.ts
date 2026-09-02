@@ -548,11 +548,13 @@ Deno.serve(async req => {
       url.searchParams.set("access_token", token);
       const post = await threadsFetch(url.toString());
       const parsed = parseAuctionPick(String(post?.text || ""), post?.permalink || null);
-      if (!parsed) return json(origin, { error: "원문에서 물건 정보를 읽지 못했습니다." }, 400);
 
       // images_only일 때는 본문을 손대지 않습니다. 직접 고쳐 두신 글을 덮어쓰지 않기 위해서입니다.
+      // 사진만 채울 때는 본문 해석이 실패해도 계속 진행합니다. 제목 형식이 조금씩 달라도
+      // 사진은 가져올 수 있어야 하기 때문입니다.
       const imagesOnly = payload.images_only === true;
-      const changes: Record<string, unknown> = imagesOnly ? {} : {
+      if (!parsed && !imagesOnly) return json(origin, { error: "원문에서 물건 정보를 읽지 못했습니다." }, 400);
+      const changes: Record<string, unknown> = (imagesOnly || !parsed) ? {} : {
         title: parsed.title,
         recommendation_reason: parsed.recommendation_reason,
         risk_note: parsed.risk_note,
@@ -570,10 +572,10 @@ Deno.serve(async req => {
         }
       }
 
-      if (!Object.keys(changes).length) return json(origin, { ok: true, title: parsed.title, images: 0 });
+      if (!Object.keys(changes).length) return json(origin, { ok: true, title: parsed?.title || null, images: 0 });
       const { error } = await db.from("auction_recommendations").update(changes).eq("id", id);
       if (error) return json(origin, { error: error.message }, 400);
-      return json(origin, { ok: true, title: parsed.title, images: addedImages });
+      return json(origin, { ok: true, title: parsed?.title || null, images: addedImages });
     } catch (error) {
       return json(origin, { error: error instanceof Error ? error.message : "원문을 다시 읽지 못했습니다." }, 502);
     }
