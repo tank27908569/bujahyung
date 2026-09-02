@@ -547,7 +547,9 @@ Deno.serve(async req => {
       const parsed = parseAuctionPick(String(post?.text || ""), post?.permalink || null);
       if (!parsed) return json(origin, { error: "원문에서 물건 정보를 읽지 못했습니다." }, 400);
 
-      const changes: Record<string, unknown> = {
+      // images_only일 때는 본문을 손대지 않습니다. 직접 고쳐 두신 글을 덮어쓰지 않기 위해서입니다.
+      const imagesOnly = payload.images_only === true;
+      const changes: Record<string, unknown> = imagesOnly ? {} : {
         title: parsed.title,
         recommendation_reason: parsed.recommendation_reason,
         risk_note: parsed.risk_note,
@@ -565,6 +567,7 @@ Deno.serve(async req => {
         }
       }
 
+      if (!Object.keys(changes).length) return json(origin, { ok: true, title: parsed.title, images: 0 });
       const { error } = await db.from("auction_recommendations").update(changes).eq("id", id);
       if (error) return json(origin, { error: error.message }, 400);
       return json(origin, { ok: true, title: parsed.title, images: addedImages });

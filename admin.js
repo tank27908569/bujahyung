@@ -715,6 +715,36 @@ document.querySelector('#import-threads-picks').addEventListener('click', async 
   }
 });
 
+// 사진 없이 들어온 예전 물건들의 사진만 원문에서 채웁니다. 본문은 건드리지 않습니다.
+document.querySelector('#backfill-pick-images').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  const targets = auctionPicks.filter(pick => pick.source_thread_id
+    && (!pick.image_url || !(Array.isArray(pick.source_images) && pick.source_images.length)));
+  if (!targets.length) { message(pickStatus, '사진이 빠진 물건이 없습니다.'); return; }
+  button.disabled = true;
+  let filled = 0;
+  let images = 0;
+  const failed = [];
+  try {
+    for (let index = 0; index < targets.length; index += 1) {
+      button.textContent = `사진 채우는 중… ${index + 1}/${targets.length}`;
+      message(pickStatus, `${targets[index].title} 사진을 가져오는 중입니다. (${index + 1}/${targets.length})`);
+      try {
+        const result = await api('reparse-auction-pick', { id: targets[index].id, images_only: true }, 90000);
+        if (result.images) { filled += 1; images += result.images; }
+      } catch (error) {
+        failed.push(targets[index].title);
+      }
+    }
+    await loadAuctionPicks();
+    const tail = failed.length ? ` 가져오지 못한 물건: ${failed.join(', ')}` : '';
+    message(pickStatus, `물건 ${filled}건에 사진 ${images}장을 채웠습니다.${tail}`, failed.length > 0);
+  } finally {
+    button.disabled = false;
+    button.textContent = '사진 빠진 물건 채우기';
+  }
+});
+
 document.querySelector('#pick-reset').addEventListener('click', resetPickForm);
 document.querySelector('#pick-image-file').addEventListener('change', async event => {
   const urls = await uploadSelectedImages(event.target, document.querySelector('#pick-upload-status'));
