@@ -293,9 +293,12 @@ function parseAuctionPick(text: string, permalink: string | null) {
   if (!minimum_price && !appraisal_price) return null;
 
   const title = lines[0].slice(0, 200);
+  // 앞에서부터 먼저 걸리는 것을 씁니다. 다세대주택·다가구주택이 '주택'으로 새지 않도록
+  // 빌라·다세대 규칙을 주택보다 앞에 둡니다.
   const typeRules: [string, string][] = [
     ["아파트", "아파트"], ["오피스텔", "오피스텔"], ["빌라", "빌라·다세대"], ["다세대", "빌라·다세대"],
-    ["다가구", "빌라·다세대"], ["상가", "상가"], ["토지", "토지"], ["공장", "공장·창고"], ["창고", "공장·창고"],
+    ["다가구", "빌라·다세대"], ["주택", "주택"], ["상가", "상가"], ["토지", "토지"],
+    ["공장", "공장·창고"], ["창고", "공장·창고"],
   ];
   const property_type = (typeRules.find(([keyword]) => title.includes(keyword)) || [null, "기타"])[1];
 
