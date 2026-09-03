@@ -646,6 +646,7 @@ publishedList.addEventListener('click', async event => {
     document.querySelector('#edit-body').value = post.body;
     document.querySelector('#edit-cover-image').value = post.cover_image_url || '';
     document.querySelector('#edit-cover-quote').value = post.cover_quote || '';
+    message(document.querySelector('#edit-message'), '');
     editModal.classList.add('open');
   }
   if (button.dataset.action === 'toggle') {
@@ -668,13 +669,32 @@ document.querySelector('#edit-form').addEventListener('submit', async event => {
     cover_image_url: document.querySelector('#edit-cover-image').value.trim(),
     cover_quote: document.querySelector('#edit-cover-quote').value.trim()
   };
+  const editMessage = document.querySelector('#edit-message');
+  const submitButton = event.target.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  message(editMessage, '저장하고 있습니다…');
   try {
-    await api('update', { id, changes });
+    await api('update', { id, changes }, 60000);
+    message(editMessage, '');
     editModal.classList.remove('open');
     await loadPosts();
     message(adminMessage, '수정 내용을 저장했습니다.');
-  } catch (error) { message(adminMessage, error.message, true); }
+  } catch (error) {
+    // 오류를 편집 창 안에 남깁니다. 페이지 맨 위에만 띄우면 창에 가려 보이지 않습니다.
+    message(editMessage, `저장하지 못했습니다 — ${error.message}`, true);
+    message(adminMessage, error.message, true);
+  } finally {
+    submitButton.disabled = false;
+  }
 });
+
+// 필수 항목이 비어 있으면 브라우저가 조용히 막습니다. 어떤 칸인지 창 안에 알려 줍니다.
+document.querySelector('#edit-form').addEventListener('invalid', event => {
+  const labels = { 'edit-category': '글 분류', 'edit-title': '제목', 'edit-body': '본문' };
+  const name = labels[event.target.id] || '필수 항목';
+  message(document.querySelector('#edit-message'), `${name}을(를) 채워야 저장할 수 있습니다.`, true);
+  event.target.scrollIntoView({ block: 'center' });
+}, true);
 
 function closeEdit() { editModal.classList.remove('open'); }
 editModal.querySelector('.modal-close').addEventListener('click', closeEdit);
