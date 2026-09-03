@@ -395,6 +395,16 @@ async function loadAuctionPicks(preloaded) {
   renderAuctionPicks();
 }
 
+// 관리 시간이 끝나면 버튼만 계속 안 먹는 것처럼 보입니다. 로그인 화면으로 되돌립니다.
+function sessionExpired() {
+  editModal.classList.remove('open');
+  adminApp.classList.remove('active');
+  loginPanel.style.display = '';
+  document.querySelector('#logout-button').hidden = true;
+  message(loginMessage, '관리 시간이 끝났습니다. 비밀번호를 다시 입력해 주세요. 작성 중이던 내용은 저장되지 않았습니다.', true);
+  loginPanel.scrollIntoView({ block: 'center' });
+}
+
 async function showAdmin(preloaded) {
   await Promise.all([loadPosts(preloaded), loadThreadsImports(), loadThreadsIntegration(), loadInquiries(), loadAuctionPicks()]);
   loginPanel.style.display = 'none';
@@ -683,6 +693,8 @@ document.querySelector('#edit-form').addEventListener('submit', async event => {
     // 오류를 편집 창 안에 남깁니다. 페이지 맨 위에만 띄우면 창에 가려 보이지 않습니다.
     message(editMessage, `저장하지 못했습니다 — ${error.message}`, true);
     message(adminMessage, error.message, true);
+    editMessage.scrollIntoView({ block: 'center' });
+    if (!adminSession) sessionExpired();
   } finally {
     submitButton.disabled = false;
   }
