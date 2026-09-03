@@ -297,7 +297,8 @@ function parseAuctionPick(text: string, permalink: string | null) {
   // 빌라·다세대 규칙을 주택보다 앞에 둡니다.
   const typeRules: [string, string][] = [
     ["아파트", "아파트"], ["오피스텔", "오피스텔"], ["빌라", "빌라·다세대"], ["다세대", "빌라·다세대"],
-    ["다가구", "빌라·다세대"], ["주택", "주택"], ["상가", "상가"], ["토지", "토지"],
+    ["다가구", "빌라·다세대"], ["주택", "주택"],
+    ["근린", "근린시설"], ["상가", "상가"], ["토지", "토지"],
     ["공장", "공장·창고"], ["창고", "공장·창고"],
   ];
   const property_type = (typeRules.find(([keyword]) => title.includes(keyword)) || [null, "기타"])[1];
