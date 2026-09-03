@@ -979,8 +979,12 @@ Deno.serve(async req => {
       const { data: current, error: currentError } = await db.from("posts").select("category").eq("id", id).maybeSingle();
       if (currentError) return json(origin, { error: currentError.message }, 400);
       if (current && current.category !== clean.category) {
+        // 번호가 없는 글(source_no is null)을 빼고 최대값을 봅니다.
+        // Postgres는 내림차순에서 NULL을 가장 큰 값으로 보아 맨 앞에 놓기 때문에,
+        // 걸러내지 않으면 최대값을 0으로 읽고 1번을 다시 매겨 충돌합니다.
         const { data: last, error: lastError } = await db.from("posts")
           .select("source_no").eq("category", clean.category)
+          .not("source_no", "is", null)
           .order("source_no", { ascending: false }).limit(1);
         if (lastError) return json(origin, { error: lastError.message }, 400);
         clean.source_no = Number(last?.[0]?.source_no || 0) + 1;
