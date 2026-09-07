@@ -21,14 +21,19 @@ function dateLabel(value) {
   return new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(value));
 }
 
+function postNumber(post) {
+  const chronologicalNumber = posts.length - posts.findIndex(item => item.id === post.id);
+  return category === 'library' ? chronologicalNumber : (post.source_no || chronologicalNumber);
+}
+
 function render(items) {
   if (!items.length) {
     grid.innerHTML = '<div class="empty-state"><strong>아직 공개된 글이 없습니다.</strong><span>부자형의 새로운 글을 준비하고 있습니다.</span></div>';
     return;
   }
-  grid.innerHTML = items.map((post, index) => `
+  grid.innerHTML = items.map(post => `
     <article class="post-card" tabindex="0" data-id="${post.id}">
-      <span class="post-card-no">${escapeHtml(sectionLabel)} · ${String(post.source_no || posts.length - index).padStart(3, '0')}</span>
+      <span class="post-card-no">${escapeHtml(sectionLabel)} · ${String(postNumber(post)).padStart(3, '0')}</span>
       <h3>${escapeHtml(post.title)}</h3>
       <time datetime="${post.published_at}">${dateLabel(post.published_at)}</time>
     </article>`).join('');
