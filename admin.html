@@ -132,6 +132,7 @@
       <h2 id="edit-heading" class="admin-title">글 수정</h2>
       <input id="edit-id" type="hidden">
       <div class="form-field"><label for="edit-category">글 분류</label><select id="edit-category" required></select></div>
+      <div class="form-field"><label for="edit-source-no">글 번호 <small>화면에 표시되는 순번</small></label><input id="edit-source-no" type="number" min="1" step="1" placeholder="비워 두면 그대로 둡니다"></div>
       <div class="form-field"><label for="edit-title">제목</label><input id="edit-title" type="text" required></div>
       <div class="form-field"><label for="edit-body">본문</label><textarea id="edit-body" required></textarea></div>
       <div class="inline-image-row"><label class="form-field inline-field"><span>본문 사진 위치</span><select id="edit-inline-position"><option value="start">글 맨 앞</option><option value="cursor" selected>현재 커서 위치</option><option value="end">글 마지막</option></select></label><label class="secondary-button file-upload-button">본문에 사진 넣기<input id="edit-inline-image-files" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple></label><span id="edit-inline-upload-status" class="upload-status">본문을 클릭해 커서를 놓으면 원하는 위치에 넣을 수 있습니다.</span></div>

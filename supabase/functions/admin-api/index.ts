@@ -169,6 +169,16 @@ async function validSession(token: string) {
   } catch { return false; }
 }
 
+// 그 분류의 마지막 번호 다음 값. 번호가 없는 글(null)은 빼고 봅니다.
+// Postgres는 내림차순에서 NULL을 가장 큰 값으로 보아 맨 앞에 놓기 때문입니다.
+async function nextSourceNo(category: string) {
+  const { data } = await db.from("posts")
+    .select("source_no").eq("category", category)
+    .not("source_no", "is", null)
+    .order("source_no", { ascending: false }).limit(1);
+  return Number(data?.[0]?.source_no || 0) + 1;
+}
+
 function cleanAuctionRecommendation(payload: Record<string, unknown>, partial = false) {
   const clean: Record<string, unknown> = {};
   const text = (key: string, max: number, required = false) => {
@@ -915,9 +925,12 @@ Deno.serve(async req => {
     const body = String(payload.body || "").trim().slice(0, 30000);
     const sourceNo = Number(payload.source_no);
     if (!categories.has(category) || !title || !body) return json(origin, { error: "분류, 제목, 본문을 모두 입력해 주세요." }, 400);
+    // 번호를 안 넣으면 그 분류의 다음 번호를 붙입니다.
+    // 비워 두면 화면이 순서로 번호를 지어내 기존 글과 번호가 겹칩니다.
+    const nextNo = Number.isInteger(sourceNo) && sourceNo > 0 ? sourceNo : await nextSourceNo(category);
     const { data, error } = await db.from("posts").insert({
       category,
-      source_no: Number.isInteger(sourceNo) && sourceNo > 0 ? sourceNo : null,
+      source_no: nextNo,
       title,
       body,
       cover_image_url: String(payload.cover_image_url || "").trim().slice(0, 500) || null,
@@ -974,21 +987,23 @@ Deno.serve(async req => {
     if (typeof changes.is_published === "boolean") clean.is_published = changes.is_published;
     if (typeof changes.category === "string" && categories.has(changes.category)) clean.category = changes.category;
 
-    // 분류를 옮길 때는 (category, source_no) 고유 제약에 걸리지 않도록 번호를 다시 매깁니다.
-    if (typeof clean.category === "string") {
-      const { data: current, error: currentError } = await db.from("posts").select("category").eq("id", id).maybeSingle();
-      if (currentError) return json(origin, { error: currentError.message }, 400);
-      if (current && current.category !== clean.category) {
-        // 번호가 없는 글(source_no is null)을 빼고 최대값을 봅니다.
-        // Postgres는 내림차순에서 NULL을 가장 큰 값으로 보아 맨 앞에 놓기 때문에,
-        // 걸러내지 않으면 최대값을 0으로 읽고 1번을 다시 매겨 충돌합니다.
-        const { data: last, error: lastError } = await db.from("posts")
-          .select("source_no").eq("category", clean.category)
-          .not("source_no", "is", null)
-          .order("source_no", { ascending: false }).limit(1);
-        if (lastError) return json(origin, { error: lastError.message }, 400);
-        clean.source_no = Number(last?.[0]?.source_no || 0) + 1;
-      }
+    // 번호를 직접 지정할 수 있습니다. 비워서 보내면 손대지 않습니다.
+    const wantedNo = Number(changes.source_no);
+    const setsNumber = "source_no" in changes && Number.isInteger(wantedNo) && wantedNo > 0;
+    if (setsNumber) clean.source_no = wantedNo;
+
+    const { data: current, error: currentError } = await db.from("posts")
+      .select("category, source_no").eq("id", id).maybeSingle();
+    if (currentError) return json(origin, { error: currentError.message }, 400);
+
+    // 분류를 옮기면 (category, source_no) 고유 제약에 걸리므로 번호를 새로 매깁니다.
+    // 번호가 아예 없던 글도 이때 채웁니다. 비워 두면 화면이 순서로 번호를 지어내
+    // 다른 글과 겹쳐 보입니다.
+    if (!setsNumber && current) {
+      const movingTo = typeof clean.category === "string" && current.category !== clean.category
+        ? clean.category
+        : (current.source_no === null ? current.category : null);
+      if (movingTo) clean.source_no = await nextSourceNo(movingTo);
     }
 
     const { error } = await db.from("posts").update(clean).eq("id", id);

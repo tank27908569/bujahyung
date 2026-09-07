@@ -656,6 +656,7 @@ publishedList.addEventListener('click', async event => {
     document.querySelector('#edit-body').value = post.body;
     document.querySelector('#edit-cover-image').value = post.cover_image_url || '';
     document.querySelector('#edit-cover-quote').value = post.cover_quote || '';
+    document.querySelector('#edit-source-no').value = post.source_no || '';
     message(document.querySelector('#edit-message'), '');
     editModal.classList.add('open');
   }
@@ -674,6 +675,7 @@ document.querySelector('#edit-form').addEventListener('submit', async event => {
   const id = document.querySelector('#edit-id').value;
   const changes = {
     category: document.querySelector('#edit-category').value,
+    source_no: document.querySelector('#edit-source-no').value.trim(),
     title: document.querySelector('#edit-title').value.trim(),
     body: document.querySelector('#edit-body').value.trim(),
     cover_image_url: document.querySelector('#edit-cover-image').value.trim(),
