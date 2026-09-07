@@ -184,6 +184,47 @@ async function uploadInlineImages(fileInput, textarea, positionSelect, statusTar
   textarea.focus();
 }
 
+// 강의 영상은 유튜브에 올리고 주소만 본문에 넣습니다.
+// Supabase 무료 요금제는 저장 1GB·월 전송 5GB라 강의 파일을 직접 두면 금방 한도가 찹니다.
+function youtubeId(value) {
+  try {
+    const url = new URL(String(value).trim());
+    const host = url.hostname.replace(/^www\./, '');
+    if (host === 'youtu.be') return url.pathname.slice(1).split('/')[0] || null;
+    if (!/(^|\.)youtube(-nocookie)?\.com$/.test(host)) return null;
+    if (url.searchParams.get('v')) return url.searchParams.get('v');
+    const parts = url.pathname.split('/').filter(Boolean);
+    const index = parts.findIndex(part => part === 'shorts' || part === 'embed' || part === 'live');
+    return index >= 0 ? parts[index + 1] || null : null;
+  } catch {
+    return null;
+  }
+}
+
+function insertYoutube(urlInput, textarea, positionSelect, statusTarget) {
+  const id = youtubeId(urlInput.value);
+  if (!id) {
+    statusTarget.textContent = '유튜브 주소를 확인해 주세요. 예: https://youtu.be/abc123';
+    return;
+  }
+  const marker = `[[유튜브:https://youtu.be/${id}]]`;
+  const cursorPosition = textarea.selectionStart;
+  const body = textarea.value;
+  const position = positionSelect.value;
+  if (position === 'start') {
+    textarea.value = `${marker}\n\n${body}`.trim();
+  } else if (position === 'end') {
+    textarea.value = `${body}\n\n${marker}`.trim();
+  } else {
+    const before = body.slice(0, cursorPosition).replace(/\s*$/, '');
+    const after = body.slice(cursorPosition).replace(/^\s*/, '');
+    textarea.value = `${before}${before ? '\n\n' : ''}${marker}${after ? `\n\n${after}` : ''}`;
+  }
+  urlInput.value = '';
+  statusTarget.textContent = '본문에 유튜브 영상을 넣었습니다. 글을 저장하면 적용됩니다.';
+  textarea.focus();
+}
+
 async function uploadInlineVideos(fileInput, textarea, positionSelect, statusTarget) {
   const cursorPosition = textarea.selectionStart;
   const uploaded = await uploadSelectedVideos(fileInput, statusTarget);
@@ -501,6 +542,15 @@ document.querySelector('#edit-inline-video-files').addEventListener('change', ev
   document.querySelector('#edit-inline-video-position'),
   document.querySelector('#edit-inline-video-upload-status')
 ));
+
+for (const prefix of ['create', 'edit']) {
+  document.querySelector(`#${prefix}-youtube-insert`).addEventListener('click', () => insertYoutube(
+    document.querySelector(`#${prefix}-youtube-url`),
+    document.querySelector(`#${prefix}-body`),
+    document.querySelector(`#${prefix}-youtube-position`),
+    document.querySelector(`#${prefix}-youtube-status`)
+  ));
+}
 
 threadsImportList.addEventListener('change', event => {
   if (!event.target.matches('input[type="checkbox"]')) return;

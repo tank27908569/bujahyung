@@ -57,10 +57,26 @@ function readableParagraphs(value = '') {
   return paragraphs;
 }
 
+// youtu.be/ID, watch?v=ID, /shorts/ID, /embed/ID 모두 받아 영상 번호만 꺼냅니다.
+function youtubeId(value) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.replace(/^www\./, '');
+    if (host === 'youtu.be') return url.pathname.slice(1).split('/')[0] || null;
+    if (!/(^|\.)youtube(-nocookie)?\.com$/.test(host)) return null;
+    if (url.searchParams.get('v')) return url.searchParams.get('v');
+    const parts = url.pathname.split('/').filter(Boolean);
+    const index = parts.findIndex(part => part === 'shorts' || part === 'embed' || part === 'live');
+    return index >= 0 ? parts[index + 1] || null : null;
+  } catch {
+    return null;
+  }
+}
+
 function renderReaderBody(value) {
   const readerBody = document.querySelector('#reader-body');
   readerBody.replaceChildren();
-  const mediaPattern = /^\[\[(사진|동영상):(https?:\/\/[^\]]+)\]\]$/gm;
+  const mediaPattern = /^\[\[(사진|동영상|유튜브):(https?:\/\/[^\]]+)\]\]$/gm;
   let offset = 0;
   const appendText = text => readableParagraphs(text).forEach(paragraph => {
     const node = document.createElement('p');
@@ -70,7 +86,29 @@ function renderReaderBody(value) {
   for (const match of String(value).matchAll(mediaPattern)) {
     appendText(String(value).slice(offset, match.index));
     const figure = document.createElement('figure');
-    if (match[1] === '동영상') {
+    if (match[1] === '유튜브') {
+      // 강의 영상은 유튜브에 두고 여기서 재생만 합니다.
+      // 무료 요금제의 저장·전송 한도를 쓰지 않고, 화질도 알아서 맞춰집니다.
+      figure.className = 'reader-inline-embed';
+      const id = youtubeId(match[2]);
+      if (id) {
+        const frame = document.createElement('iframe');
+        frame.src = `https://www.youtube-nocookie.com/embed/${id}`;
+        frame.title = '유튜브 영상';
+        frame.loading = 'lazy';
+        frame.allow = 'accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+        frame.allowFullscreen = true;
+        frame.referrerPolicy = 'strict-origin-when-cross-origin';
+        figure.appendChild(frame);
+      } else {
+        const link = document.createElement('a');
+        link.href = match[2];
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = '유튜브에서 영상 보기 ↗';
+        figure.appendChild(link);
+      }
+    } else if (match[1] === '동영상') {
       figure.className = 'reader-inline-video';
       const video = document.createElement('video');
       video.src = match[2];
