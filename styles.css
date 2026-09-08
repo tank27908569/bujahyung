@@ -4,10 +4,6 @@
 @media(max-width:480px){.hero h1{font-size:36px}.hero-actions{align-items:flex-start;flex-direction:column;gap:22px}.hero-frame{height:440px}.numbers strong{font-size:27px}.numbers p{font-size:10px;line-height:1.5}.book-cover{width:255px;height:370px}.book-cover h3{font-size:27px;margin-top:48px}.book-art{min-height:420px}.routine-image{height:420px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.reveal{opacity:1;transform:none;transition:none}}
 
-.content-card.text-art:after{background:linear-gradient(to bottom,rgba(0,0,0,.08) 20%,rgba(0,0,0,.38) 52%,rgba(0,0,0,.94) 100%)}
-.content-card.text-art>div{width:calc(100% + 56px);margin:-18px -28px -28px;padding:24px 28px 27px;background:rgba(18,18,15,.78);border-top:1px solid rgba(255,255,255,.16);backdrop-filter:blur(7px)}
-.content-card.text-art h3{text-shadow:0 2px 12px rgba(0,0,0,.85)}
-
 /* Business consultation bridge */
 .business-bridge{background:#e7e1d4;border-top:1px solid var(--line)}
 .business-bridge h2{font:400 clamp(38px,4.4vw,64px)/1.25 'Gowun Batang',serif;letter-spacing:-.06em;margin:22px 0}
