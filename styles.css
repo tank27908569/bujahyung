@@ -67,10 +67,10 @@
 .book-meta>span{font-size:10px;letter-spacing:.18em;color:var(--red);font-weight:700}
 @media(max-width:900px){.book-layout{grid-template-columns:1fr;gap:45px}.book-art.books-display{min-height:auto;padding:10px 0 60px;gap:16px}.book-volume{width:min(46%,225px)}.book-volume-second{transform:translateY(28px)}.book-meta{align-items:flex-start;flex-direction:column;margin-top:16px}}
 .content-card{text-decoration:none}
-.content-cards{grid-template-columns:repeat(6,1fr)}
-.content-card{grid-column:span 2}
-.content-card:nth-child(n+4){grid-column:span 3}
+.content-cards{grid-template-columns:repeat(3,minmax(0,1fr))}
+.content-card,.content-card:nth-child(n+4){grid-column:auto}
 .content-card.paper{background:#ded6c7;color:var(--ink)}
 .content-card.paper div p,.content-card.paper div span{color:#6f5548}
 .content-card.gold{background:#6f5a3c}
-@media(max-width:900px){.content-cards{grid-template-columns:1fr}.content-card,.content-card:nth-child(n+4){grid-column:auto}}
+@media(max-width:900px){.content-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.content-card,.content-card:nth-child(n+4){grid-column:auto}}
+@media(max-width:600px){.content-cards{grid-template-columns:1fr}}
