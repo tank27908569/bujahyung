@@ -753,12 +753,12 @@ Deno.serve(async req => {
       if (previousError) return json(origin, { error: previousError.message }, 400);
       const previousById = new Map((previous || []).map(item => [item.thread_id, item]));
 
-      // 답글을 아직 한 번도 못 가져온 원문만 2단계 대상으로 넘깁니다.
+      // 이미 답글을 가져온 원문도 다시 확인해야 나중에 이어 쓴 글을 놓치지 않습니다.
       const pending: string[] = [];
       const rows = roots.map(root => {
         const existing = previousById.get(root.id);
         const replies = Array.isArray(existing?.replies) ? existing!.replies : [];
-        if (!replies.length) pending.push(root.id);
+        pending.push(root.id);
         return {
           thread_id: root.id,
           permalink: root.permalink || null,
@@ -836,6 +836,14 @@ Deno.serve(async req => {
     if (rows.length) {
       const { error } = await db.from("threads_imports").upsert(rows, { onConflict: "thread_id" });
       if (error) return json(origin, { error: error.message }, 400);
+      // 이미 홈페이지에 게시한 글도 새로 발견한 이어 쓴 답글까지 본문에 반영합니다.
+      for (const row of rows) {
+        if (!row.published_post_id) continue;
+        const { error: postError } = await db.from("posts")
+          .update({ body: row.combined_body })
+          .eq("id", row.published_post_id);
+        if (postError) failed.push({ id: row.thread_id, error: postError.message });
+      }
     }
     return json(origin, { ok: true, updated: rows.length, failed });
   }
