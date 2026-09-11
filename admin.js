@@ -291,10 +291,11 @@ function filteredPosts() {
   const category = document.querySelector('#post-category-filter').value;
   const query = document.querySelector('#published-search').value.trim().toLocaleLowerCase('ko');
   const normalizedQuery = query.replace(/^#/, '').trim();
+  const numericQuery = /^\d+$/.test(normalizedQuery) ? Number(normalizedQuery) : null;
   return posts.filter(post => {
     if (category !== 'all' && post.category !== category) return false;
     const textMatches = `${post.title}\n${post.body}`.toLocaleLowerCase('ko').includes(query);
-    const numberMatches = normalizedQuery !== '' && String(post.source_no ?? '') === normalizedQuery;
+    const numberMatches = numericQuery !== null && Number(post.source_no) === numericQuery;
     return textMatches || numberMatches;
   });
 }
