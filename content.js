@@ -23,7 +23,11 @@ function dateLabel(value) {
 
 function postNumber(post) {
   const chronologicalNumber = posts.length - posts.findIndex(item => item.id === post.id);
-  return category === 'library' ? chronologicalNumber : (post.source_no || chronologicalNumber);
+  // 서당과 서재는 게시 순서 자체가 연재 번호입니다. 저장된 원본 번호는
+  // 새 글을 추가할 때 중복될 수 있으므로 공개 목록에서는 일련번호를 계산합니다.
+  return category === 'library' || category === 'thread-seodang'
+    ? chronologicalNumber
+    : (post.source_no || chronologicalNumber);
 }
 
 function render(items) {
