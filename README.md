@@ -23,3 +23,31 @@ Vercel에서 별도 빌드 명령 없이 저장소 루트를 배포하면 됩니
 `ADMIN_PIN_HASH`는 `SHA-256("PIN:SALT")`의 16진수 해시이며, 세 값은 저장소에 커밋하지 않습니다.
 `supabase/config.toml`의 `verify_jwt = false`는 로그인 요청을 함수까지 전달하기 위한 설정이며,
 관리 작업은 함수가 발급하고 검증하는 서명 세션으로 보호됩니다.
+
+## 상담 신청 알림
+
+상담 신청이 접수되면 `consultation-api` 함수가 관리자에게 이메일과 문자를 보냅니다.
+두 알림은 서로 독립적으로 발송되며, 한쪽이 실패해도 나머지와 상담 신청 저장에는 영향이 없습니다.
+시크릿을 설정하지 않은 채널은 조용히 건너뜁니다.
+
+### 이메일 (Gmail SMTP)
+
+별도 메일 발송 서비스 없이 Gmail 계정의 앱 비밀번호로 직접 발송합니다.
+
+- `GMAIL_USER` — 발송에 사용할 Gmail 주소
+- `GMAIL_APP_PASSWORD` — 구글 계정 2단계 인증 후 발급한 16자리 앱 비밀번호(공백은 자동 제거)
+- `NOTIFY_TO_EMAIL` — 선택. 알림을 받을 주소(쉼표로 여러 개 지정 가능). 생략하면 `GMAIL_USER`로 보냅니다.
+- `SITE_URL` — 선택. 알림 메일의 관리자 페이지 링크 주소. 기본값 `https://bujahyung.vercel.app`
+
+### 문자 (Solapi)
+
+문자 알림은 아래 시크릿을 모두 설정해야 동작하며, Solapi에 발신번호를 사전등록해야 합니다.
+
+- `SOLAPI_API_KEY`, `SOLAPI_API_SECRET` — Solapi(https://solapi.com) API 키와 시크릿
+- `SOLAPI_SENDER_PHONE` — Solapi에 사전등록한 발신번호
+- `NOTIFY_TO_PHONE` — 알림을 받을 번호(쉼표로 여러 개 지정 가능)
+
+문자 본문은 90바이트를 넘으면 LMS로 자동 전환되어 요금이 올라가므로
+신청자 성함·상담 분야·연락처만 담고, 상담 내용 전문은 메일과 관리자 페이지에서 확인합니다.
+
+발송 실패 내용은 함수 로그에 기록됩니다.

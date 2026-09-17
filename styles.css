@@ -74,3 +74,4 @@
 .content-card.gold{background:#6f5a3c}
 @media(max-width:900px){.content-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.content-card,.content-card:nth-child(n+4){grid-column:auto}}
 @media(max-width:600px){.content-cards{grid-template-columns:1fr}}
+.site-header .admin-link{color:var(--muted)}.site-header .admin-link:after{background:var(--muted)}
