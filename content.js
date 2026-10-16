@@ -6,6 +6,9 @@ const config = window.BUJAHYUNG_SUPABASE || {};
 const category = document.body.dataset.category;
 const sectionLabel = document.body.dataset.sectionLabel || 'BUJAHYUNG';
 let posts = [];
+// 지금 목록에 보이는 순서(검색 결과 포함). 팝업에서 이전·다음 글로 이동할 때 이 순서를 따릅니다.
+let visiblePosts = [];
+let currentIndex = -1;
 
 document.querySelector('#year').textContent = new Date().getFullYear();
 
@@ -31,6 +34,7 @@ function postNumber(post) {
 }
 
 function render(items) {
+  visiblePosts = items;
   if (!items.length) {
     grid.innerHTML = '<div class="empty-state"><strong>아직 공개된 글이 없습니다.</strong><span>부자형의 새로운 글을 준비하고 있습니다.</span></div>';
     return;
@@ -169,13 +173,75 @@ function renderReaderCover(post) {
   });
 }
 
+function injectReaderNavStyle() {
+  if (document.querySelector('#reader-nav-style')) return;
+  const style = document.createElement('style');
+  style.id = 'reader-nav-style';
+  style.textContent = `
+    #reader-modal .modal-panel{padding-bottom:0}
+    .reader-nav{position:sticky;bottom:0;z-index:2;display:grid;grid-template-columns:1fr auto 1fr;align-items:stretch;gap:10px;margin:44px 0 0;padding:14px 0 18px;background:var(--paper,#f1eee6);border-top:1px solid var(--line,rgba(23,24,21,.15));box-shadow:0 -14px 18px -12px rgba(23,24,21,.12)}
+    .reader-nav-btn{display:flex;flex-direction:column;gap:4px;min-width:0;padding:10px 12px;border:1px solid var(--line,rgba(23,24,21,.15));background:transparent;color:var(--ink,#171815);font:inherit;cursor:pointer;text-align:left;transition:background .15s,border-color .15s}
+    .reader-nav-btn.next{text-align:right}
+    .reader-nav-btn:hover:not(:disabled){background:var(--paper2,#e7e1d4);border-color:var(--gold,#b89b68)}
+    .reader-nav-btn:disabled{opacity:.35;cursor:default}
+    .reader-nav-dir{font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--red,#8f2e25)}
+    .reader-nav-title{font:14px/1.4 'Gowun Batang',serif;color:#4e4c46;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .reader-nav-count{align-self:center;font-size:12px;letter-spacing:.06em;color:var(--muted,#77746c);white-space:nowrap}
+    @media(max-width:680px){.reader-nav{gap:8px;margin-top:36px}.reader-nav-btn{padding:9px 10px}.reader-nav-title{font-size:13px}}
+  `;
+  document.head.appendChild(style);
+}
+
+function ensureReaderNav() {
+  let nav = document.querySelector('#reader-nav');
+  if (nav) return nav;
+  injectReaderNavStyle();
+  nav = document.createElement('nav');
+  nav.id = 'reader-nav';
+  nav.className = 'reader-nav';
+  nav.setAttribute('aria-label', '글 이동');
+  nav.innerHTML = '<button type="button" class="reader-nav-btn prev" data-dir="-1"><span class="reader-nav-dir">‹ 이전 글</span><span class="reader-nav-title"></span></button>'
+    + '<span class="reader-nav-count" aria-live="polite"></span>'
+    + '<button type="button" class="reader-nav-btn next" data-dir="1"><span class="reader-nav-dir">다음 글 ›</span><span class="reader-nav-title"></span></button>';
+  modal.querySelector('.modal-panel').appendChild(nav);
+  nav.addEventListener('click', event => {
+    const button = event.target.closest('.reader-nav-btn');
+    if (button && !button.disabled) stepPost(Number(button.dataset.dir));
+  });
+  return nav;
+}
+
+function updateReaderNav() {
+  const nav = ensureReaderNav();
+  const list = visiblePosts.length ? visiblePosts : posts;
+  const setButton = (selector, target) => {
+    const button = nav.querySelector(selector);
+    button.disabled = !target;
+    button.querySelector('.reader-nav-title').textContent = target ? target.title : '';
+    button.title = target ? target.title : '';
+  };
+  setButton('.prev', list[currentIndex - 1]);
+  setButton('.next', list[currentIndex + 1]);
+  nav.querySelector('.reader-nav-count').textContent = currentIndex >= 0 ? `${currentIndex + 1} / ${list.length}` : '';
+}
+
+function stepPost(direction) {
+  const list = visiblePosts.length ? visiblePosts : posts;
+  const target = list[currentIndex + direction];
+  if (target) openPost(target.id);
+}
+
 function openPost(id) {
   const post = posts.find(item => item.id === id);
   if (!post) return;
+  const list = visiblePosts.length ? visiblePosts : posts;
+  currentIndex = list.findIndex(item => item.id === id);
   document.querySelector('#reader-no').textContent = sectionLabel;
   document.querySelector('#reader-title').textContent = post.title;
   renderReaderCover(post);
   renderReaderBody(post.body);
+  updateReaderNav();
+  modal.querySelector('.modal-panel').scrollTop = 0;
   modal.classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -183,6 +249,9 @@ function openPost(id) {
 function closeModal() {
   modal.classList.remove('open');
   document.body.style.overflow = '';
+  currentIndex = -1;
+  // 팝업을 닫으면 재생 중인 영상도 멈춥니다.
+  modal.querySelectorAll('video').forEach(video => video.pause());
 }
 
 async function loadPosts() {
@@ -219,6 +288,29 @@ grid.addEventListener('keydown', event => {
 });
 modal.querySelector('.modal-close').addEventListener('click', closeModal);
 modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
-document.addEventListener('keydown', event => { if (event.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', event => {
+  if (!modal.classList.contains('open')) return;
+  if (event.key === 'Escape') closeModal();
+  if (event.target.closest && event.target.closest('input, textarea')) return;
+  if (event.key === 'ArrowLeft') stepPost(-1);
+  if (event.key === 'ArrowRight') stepPost(1);
+});
+(() => {
+  const panel = modal.querySelector('.modal-panel');
+  let startX = 0, startY = 0, tracking = false;
+  panel.addEventListener('touchstart', event => {
+    if (event.touches.length !== 1) return;
+    tracking = true;
+    startX = event.touches[0].clientX;
+    startY = event.touches[0].clientY;
+  }, { passive: true });
+  panel.addEventListener('touchend', event => {
+    if (!tracking) return;
+    tracking = false;
+    const dx = event.changedTouches[0].clientX - startX;
+    const dy = event.changedTouches[0].clientY - startY;
+    if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) stepPost(dx < 0 ? 1 : -1);
+  }, { passive: true });
+})();
 
 loadPosts();
